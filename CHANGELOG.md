@@ -1,0 +1,370 @@
+# Changelog - Forensic Data Capture Extension
+
+All notable changes to this project will be documented in this file.
+
+---
+
+## [1.2.0] - 2026-09-22
+
+### ✨ Threads Post Capture
+
+Opening a Threads post (`threads.com/@user/post/CODE`) now switches the popup into
+thread mode and captures the post together with its replies.
+
+- **Reply loading** — scrolls and clicks "show more replies" until the thread stops
+  growing, so virtualised replies are all observed. Stops at the "Related threads"
+  marker, so the endless recommendation feed is never pulled in.
+- **Thread data extraction** (`YYYYMMDDTHHmmssZ-thread.json`) — post text, author,
+  user id, UTC timestamps, like/reply/repost/quote counts, mentions, links, quoted
+  and reposted posts, media URLs and reply linkage, merged from three sources:
+  server-embedded Relay payloads, `/api/graphql` responses recorded over the
+  DevTools protocol, and the rendered DOM.
+- **Evidence report** (`YYYYMMDDTHHmmssZ-thread-report.html`) — self-contained,
+  script-free rendering of the thread with capture metadata and file hashes.
+- **Raw API evidence** (`raw/`) — GraphQL response bodies, embedded JSON payloads and
+  per-post `outerHTML` (needed because Threads removes off-screen posts from the DOM).
+  Request tokens (`fb_dtsg`, `lsd`, `jazoest`) are deliberately not recorded.
+- **Media download** (`media/`) — post images and videos fetched from the CDN URLs in
+  the API data, hashed like every other file.
+- **Completeness reporting** — captured replies are compared against the reply count
+  Threads reports, and hidden/restricted/nested-but-not-shown replies are listed in
+  the report, the manifest and the popup.
+- **Options** (persisted): load all replies, load the post fresh, download media.
+- **Fresh load in a separate tab** — the post is opened from its own link in a new tab with
+  the network recorder attached, captured there, and the tab is closed. The user's tab is
+  never navigated: signed-in Threads can refuse a direct load (redirect to the feed or
+  `/?error=invalid_post`), and navigating the user's tab would destroy the in-app view with
+  no way back. On refusal the post is captured as displayed and a completeness note says so.
+- **Login prompts / modal dialogs** are dismissed before every reply-loading round and
+  screenshot frame (they scroll-lock the page) and hidden if they reappear; the count is in
+  the manifest.
+
+### 🐛 Bug Fixes
+
+- **Screenshots were wrong on HiDPI/Retina displays.** The stitcher mixed CSS pixels
+  with the device pixels that `captureVisibleTab` returns, so only the top-left
+  quarter of each frame was drawn at 2× scale. Scale is now derived from the captured
+  image itself, and output is native resolution.
+- **Screenshots duplicated content at the bottom of pages.** Frames were placed at the
+  requested scroll offset; the browser clamps the last scroll, so the final frame
+  overlapped. Frames are now placed at the offset read back from the page.
+- **Fixed/sticky headers and nav rails repeated in every stitched frame.** They are
+  now hidden after the first frame and restored afterwards.
+- **Pages that scroll an inner element (app shells, modal scroll-lock) captured only
+  the first viewport.** The real scroll container is detected and scrolled.
+- **Infinite-scroll pages never finished capturing.** The captured height is now fixed
+  before the first frame.
+- **hashes.txt did not verify the manifest.** The manifest hash was computed and then
+  written into the manifest itself, changing the file after hashing. Every file is now
+  built once as bytes, hashed from those bytes and downloaded from those bytes, and
+  `hashes.txt` is plain `sha256sum` format with no comment lines.
+- **Failed downloads were reported as a successful capture.** Download failures now
+  fail the capture and are recorded in the chain of custody.
+- **`content.js` threw on every page load.** It was registered as a content script but
+  used ES module `import`, which content scripts cannot do; every page paid a script
+  error and the extension silently fell back to programmatic injection. The dead
+  declarative registration, `content.js` and `dom-capture.js` were removed.
+- **Screenshot capture could hang forever** when the browser window was minimised or
+  covered (the OS stops compositing, so no screenshot can be produced). Capture now
+  times out with an actionable message.
+- **Popup rendered capture URLs with `innerHTML`.** History and results are built as
+  DOM nodes.
+
+### 🔧 Technical
+
+- New `debugger` permission (Chromium only). Used to record Threads API responses and
+  to capture screenshots without the `captureVisibleTab` rate limit. Chrome shows a
+  "being debugged" bar while a Threads capture runs; captures fall back to
+  `captureVisibleTab` and DOM-only extraction when the protocol is unavailable.
+- Screenshots are split into `-partNN.png` segments when a page exceeds canvas limits.
+- New modules: `src/content/page-tools.js` (page-side toolkit), `src/background/cdp-session.js`,
+  `src/background/threads-capture.js`, `src/threads/threads-parser.js`,
+  `src/threads/threads-report.js`, `src/utils/encoding-utils.js`.
+
+---
+
+## [1.1.2] - 2026-01-09
+
+### 🐛 Critical Bug Fix
+
+#### Screenshot Capture Issue
+- **Fixed: Screenshots cutting off top of pages**
+- File: `src/background/screenshot-capture.js`
+- **Root Cause:** Capture started from current scroll position instead of page top
+- **Solution:** Explicitly scroll to (0, 0) before starting capture loop
+- **Additional Improvement:** Restore original scroll position after capture completes
+
+### 🎯 Changes Made
+
+**Before:**
+- Started capturing from wherever page was scrolled
+- First capture could miss top content
+- Scrolled back to top (0, 0) after capture
+
+**After:**
+- Scroll to absolute top (0, 0) BEFORE first capture
+- Wait 500ms for scroll to settle
+- Skip delay on first capture (already at top)
+- Restore original scroll position after capture
+- User's scroll position preserved
+
+### ⚡ Impact
+- Full-page screenshots now correctly include top of page
+- Better UX: User's scroll position is preserved
+- No performance impact (same number of delays)
+
+---
+
+## [1.1.1] - 2026-01-08
+
+### 🔒 Security Improvements
+
+#### Content Security Policy
+- **Added strict CSP to manifest.json**
+- Prevents XSS attacks on extension pages
+- Policy: `script-src 'self'; object-src 'self'`
+- Follows Manifest V3 security best practices
+
+### 🐛 Bug Fixes
+
+#### Download Timeout
+- **Increased timeout from 30s to 60s**
+- File: `src/background/download-manager.js`
+- Prevents download failures for large files on slow connections
+- Improves reliability for screenshots >2MB
+
+#### Message Listener Memory Leak
+- **Fixed duplicate message listeners in popup**
+- File: `src/popup/popup.js`
+- Added listener cleanup on capture completion/error
+- Prevents listener accumulation on repeated captures
+- Improves popup performance
+
+### 🧹 Code Quality
+
+#### UI Cleanup
+- **Removed non-functional settings link**
+- Settings page not yet implemented (planned for v1.2.0)
+- Updated popup footer to show v1.1.1
+- Added comment for future reference
+
+### 📝 Version Updates
+- `manifest.json`: v1.1.0 → v1.1.1
+- `popup.html`: v1.0.0 → v1.1.1
+- Documentation updated
+
+### ⚡ Impact
+- No user-facing feature changes
+- All v1.1.0 features work identically
+- Improved security and reliability
+- Better memory management
+
+---
+
+## [1.1.0] - 2026-01-08
+
+### 🎉 New Features
+
+#### Folder Organization
+- **All captured files now download into organized folders**
+- Folder naming: `forensic-capture-{TIMESTAMP}/`
+- All 6 evidence files contained in single timestamped folder
+- Keeps Downloads folder clean and organized
+- Easy to manage multiple captures
+
+#### Full-Page Screenshot Capture
+- **Complete page capture using scroll-and-stitch algorithm**
+- Captures entire scrollable page (not just viewport)
+- Handles pages of any height (5000px, 10000px+)
+- High-quality PNG stitching with no visible seams
+- Automatic fallback to viewport capture if scroll fails
+- Progress tracking during multi-section capture
+
+### 🔧 Technical Improvements
+
+#### New Files
+- `src/background/screenshot-capture.js` - Full-page screenshot module
+  - Scroll-and-stitch implementation
+  - Canvas-based image stitching
+  - Viewport fallback logic
+
+#### Modified Files
+- `src/background/capture-manager.js`
+  - Added folder organization support
+  - Integrated full-page screenshot capture
+  - Enhanced error handling with fallback
+  - Improved logging for folder operations
+
+- `src/background/download-manager.js`
+  - Added `folderName` parameter for file downloads
+  - Automatic folder creation in Downloads directory
+  - Updated path handling for nested downloads
+
+- `manifest.json` - Version bumped to 1.1.0
+- `package.json` - Version bumped to 1.1.0
+
+### 📚 Documentation
+- Added `IMPROVEMENTS.md` - Feature documentation
+- Added `CHANGELOG.md` - This file
+
+### ⚡ Performance Notes
+- Capture time increased for long pages: 5-20 seconds (was 2-5 sec)
+- Screenshot file size increased: 500KB-3MB (was 100KB-500KB)
+- Worth the tradeoff for complete forensic evidence
+
+### 🐛 Bug Fixes
+- None (new feature release)
+
+---
+
+## [1.0.0] - 2026-01-08
+
+### 🎉 Initial Release
+
+#### Core Features
+- Cross-browser support (Chrome, Firefox, Safari)
+- Viewport screenshot capture (PNG, 100% quality)
+- Complete DOM structure capture with metadata
+- Browser storage capture (localStorage, sessionStorage, IndexedDB)
+- HTTP cookies capture with all attributes
+- SHA-256 hashing for all files
+- ISO 8601 timestamps (UTC)
+- Chain of custody logging
+- Audit trail tracking
+- Forensic manifest generation
+
+#### Architecture
+- Manifest V3 service worker
+- Content script with automatic injection
+- Page-context storage access
+- Cross-browser polyfill support
+- Professional purple-themed UI
+
+#### Files Captured (per capture)
+1. `{timestamp}-manifest.json` - Forensic metadata
+2. `{timestamp}-screenshot.png` - Page screenshot
+3. `{timestamp}-dom.json` - HTML structure
+4. `{timestamp}-storage.json` - Browser storage
+5. `{timestamp}-cookies.json` - HTTP cookies
+6. `{timestamp}-hashes.txt` - SHA-256 hashes
+
+#### Documentation
+- Comprehensive README.md
+- NEXT_STEPS.md roadmap
+- BUILD_COMPLETE.md status
+- FIXED.md troubleshooting
+
+### 🐛 Bug Fixes (Post-Launch)
+
+#### v1.0.1 (Same Day)
+- **Fixed:** "browser is not defined" error
+  - Added webextension-polyfill imports to background modules
+  - Files: background.js, capture-manager.js, forensic-metadata.js, download-manager.js
+
+- **Fixed:** "Could not establish connection" error
+  - Implemented automatic content script injection
+  - Created content-injector.js for programmatic injection
+  - Added PING message handler
+  - Works on both new and existing tabs
+
+---
+
+## Version Comparison
+
+| Feature | v1.0.0 | v1.1.0 |
+|---------|--------|--------|
+| Screenshot Type | Viewport only | Full-page scroll |
+| File Organization | Downloads root | Timestamped folders |
+| Capture Time | 2-5 sec | 5-20 sec (long pages) |
+| Screenshot Size | 100-500 KB | 500KB-3MB |
+| Page Height Limit | Viewport (~1000px) | Unlimited |
+| Fallback Support | No | Yes (viewport fallback) |
+
+---
+
+## Upgrade Guide
+
+### From v1.0.0 to v1.1.0
+
+**No breaking changes!** Simply reload the extension:
+
+1. **Chrome:** `chrome://extensions/` → Click reload (🔄)
+2. **Firefox:** `about:debugging` → Click "Reload"
+
+**What to expect:**
+- Files now download into folders (not Downloads root)
+- Screenshots take longer but capture full page
+- Larger screenshot files (better evidence quality)
+- Same file structure within folders
+
+**Compatibility:**
+- All v1.0.0 features still work
+- Hash verification unchanged
+- Manifest format unchanged
+- No data migration needed
+
+---
+
+## Roadmap
+
+### v1.2.0 (Planned)
+- Settings page for user preferences
+- Toggle between full-page and viewport capture
+- Custom folder name prefix
+- Capture progress bar in popup UI
+- Configurable scroll delay
+
+### v1.3.0 (Planned)
+- ZIP packaging of evidence folders
+- Network traffic capture (HAR export)
+- Batch capture multiple tabs
+- Screenshot quality settings
+- Selective capture options
+
+### v2.0.0 (Future)
+- Video recording capability
+- Encrypted evidence packages
+- Cloud backup integration
+- Custom forensic report formats
+- Timeline view for multiple captures
+
+---
+
+## Known Issues
+
+### v1.1.0
+- **Very long pages** (>20,000px): May take 30+ seconds to capture
+  - Expected behavior - wait patiently
+
+- **Sticky headers/footers**: May appear in multiple screenshot sections
+  - Expected behavior - shows actual page state during scroll
+
+- **Lazy-loaded images**: May not load during rapid scrolling
+  - Workaround: Scroll page manually before capturing
+
+- **Animated content**: May look different in each section
+  - Expected behavior - captures state at each position
+
+### v1.0.0
+- All issues resolved in v1.0.1 patch
+
+---
+
+## Credits
+
+**Developer:** AI-Assisted Development
+**License:** MIT License
+**Platform:** WebExtensions API (Manifest V3)
+
+---
+
+## Support
+
+**Documentation:** See README.md and IMPROVEMENTS.md
+**Issues:** Check FIXED.md for troubleshooting
+**Roadmap:** See NEXT_STEPS.md
+
+---
+
+**Current Version:** 1.1.2
+**Last Updated:** 2026-01-09

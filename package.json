@@ -1,0 +1,28 @@
+{
+  "name": "forensic-capture-extension",
+  "version": "1.2.0",
+  "description": "Cross-browser forensic data capture tool with full-page screenshots, organized folder downloads and Threads post + reply capture",
+  "main": "src/background/background.js",
+  "scripts": {
+    "lint": "bunx --bun eslint@9 src",
+    "test": "bun run lint && bun tests/stitcher-geometry.test.mjs && bun tests/threads-parser.test.mjs && bun tests/evidence-pipeline.test.mjs"
+  },
+  "keywords": [
+    "forensic",
+    "browser",
+    "extension",
+    "capture",
+    "evidence",
+    "webextension",
+    "threads"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "web-ext": "^7.9.0"
+  },
+  "notes": "Run 'npm install' to install webextension-polyfill when npm is available, or download it manually from: https://unpkg.com/webextension-polyfill@0.12.0/dist/browser-polyfill.min.js"
+}

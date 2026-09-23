@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forensic Data Capture</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="title">Forensic Data Capture</h1>
+      <p class="subtitle">Evidence Collection Tool</p>
+    </header>
+
+    <!-- Main Capture Section -->
+    <main class="main">
+      <!-- Threads post options -->
+      <div id="threadsSection" class="threads-section hidden">
+        <div class="threads-header">
+          <span class="threads-badge">Threads post detected</span>
+          <span id="threadsTarget" class="threads-target"></span>
+        </div>
+        <label class="option"><input type="checkbox" id="optLoadAllReplies" checked>
+          <span><strong>Load all replies</strong><br>Scrolls and expands the thread until no new replies appear.</span>
+        </label>
+        <label class="option"><input type="checkbox" id="optReloadBeforeCapture" checked>
+          <span><strong>Load the post fresh</strong><br>Opens the post's own link in a new tab so its API responses are recorded as evidence. Your current tab is left as it is.</span>
+        </label>
+        <label class="option"><input type="checkbox" id="optDownloadMedia" checked>
+          <span><strong>Download media</strong><br>Saves post images and videos next to the evidence files.</span>
+        </label>
+        <p class="threads-note">Chrome shows a "being debugged" bar during capture. Keep this tab active and the window visible on screen until the capture finishes.</p>
+      </div>
+
+      <!-- Capture Button -->
+      <div class="capture-section">
+        <button id="captureButton" class="btn-capture" aria-label="Capture forensic evidence">
+          <span class="btn-icon">📸</span>
+          <span class="btn-text">Capture Evidence</span>
+        </button>
+      </div>
+
+      <!-- Status Display -->
+      <div id="statusSection" class="status-section hidden">
+        <div class="status-header">
+          <span id="statusIcon" class="status-icon">⏳</span>
+          <span id="statusText" class="status-text">Initializing...</span>
+        </div>
+        <div id="statusProgress" class="status-progress hidden">
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+          </div>
+          <span id="progressText" class="progress-text">0%</span>
+        </div>
+        <div id="statusDetails" class="status-details"></div>
+      </div>
+
+      <!-- Result Display -->
+      <div id="resultSection" class="result-section hidden">
+        <div class="result-header">
+          <span class="result-icon">✓</span>
+          <span class="result-text">Capture Complete</span>
+        </div>
+        <div id="resultInfo" class="result-info"></div>
+      </div>
+
+      <!-- Error Display -->
+      <div id="errorSection" class="error-section hidden">
+        <div class="error-header">
+          <span class="error-icon">⚠</span>
+          <span id="errorText" class="error-text">An error occurred</span>
+        </div>
+        <div id="errorDetails" class="error-details"></div>
+      </div>
+    </main>
+
+    <!-- Recent Captures -->
+    <section id="historySection" class="history-section hidden">
+      <h2 class="history-title">Recent Captures</h2>
+      <div id="historyList" class="history-list"></div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-info">
+        <span class="version">v1.2.0</span>
+        <!-- Settings link removed - settings page not yet implemented -->
+      </div>
+    </footer>
+  </div>
+
+  <!-- Scripts -->
+  <script src="../../lib/browser-polyfill.min.js"></script>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

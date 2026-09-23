@@ -1,0 +1,156 @@
+{
+  "note": "Trimmed reproduction of the payload shapes seen on a real threads.com post page: a Relay preloaded payload (root post + direct replies container keyed by post id), a paginated GraphQL reply batch, a related-posts block, and the DOM records page-tools harvests while scrolling.",
+  "embedded": [
+    {
+      "require": [["ScheduledServerJS", "handle", null, [{
+        "__bbox": {
+          "require": [["RelayPrefetchedStreamCache", "next", [], [null, {
+            "__bbox": {
+              "result": {
+                "data": {
+                  "media": {
+                    "pk": "3991243342016009629",
+                    "id": "3991243342016009629_63482099442",
+                    "code": "ROOT1",
+                    "taken_at": 1790013304,
+                    "media_type": 8,
+                    "like_count": 95,
+                    "caption": { "text": "Spotlight: a root post with media" },
+                    "caption_is_edited": false,
+                    "user": { "pk": "63482099442", "username": "rootauthor", "full_name": "Root Author", "is_verified": true, "profile_pic_url": "https://cdn.example/root.jpg" },
+                    "carousel_media": [
+                      { "image_versions2": { "candidates": [{ "width": 1088, "height": 1456, "url": "https://cdn.example/big.jpg" }, { "width": 320, "height": 428, "url": "https://cdn.example/small.jpg" }] } },
+                      { "video_versions": [{ "type": 101, "url": "https://cdn.example/clip.mp4" }], "image_versions2": { "candidates": [{ "width": 640, "height": 640, "url": "https://cdn.example/poster.jpg" }] }, "original_width": 640, "original_height": 640 }
+                    ],
+                    "text_post_app_info": {
+                      "is_reply": false,
+                      "direct_reply_count": 19,
+                      "repost_count": 3,
+                      "quote_count": 0,
+                      "reshare_count": 3,
+                      "share_info": { "quoted_post": null, "reposted_post": null },
+                      "link_preview_attachment": null,
+                      "text_fragments": { "fragments": [] }
+                    }
+                  }
+                }
+              }
+            }
+          }]]]
+        }
+      }]]]
+    },
+    {
+      "require": [["ScheduledServerJS", "handle", null, [{
+        "__bbox": {
+          "require": [["RelayPrefetchedStreamCache", "next", [], [null, {
+            "__bbox": {
+              "result": {
+                "data": {
+                  "media": {
+                    "id": "3991243342016009629_63482099442",
+                    "text_post_app_info": {
+                      "has_unavailable_replies": true,
+                      "direct_replies": {
+                        "page_info": { "has_next_page": true, "end_cursor": "cursor-1" },
+                        "edges": [
+                          {
+                            "posts": {
+                              "edges": [
+                                { "node": {
+                                  "pk": "3991244000000000001",
+                                  "id": "3991244000000000001_11111",
+                                  "code": "REPLY1",
+                                  "taken_at": 1790013457,
+                                  "media_type": 19,
+                                  "like_count": 4,
+                                  "caption": { "text": "First reply, mentions @rootauthor and links" },
+                                  "user": { "pk": "11111", "username": "replier_one", "full_name": "Replier One", "is_verified": false },
+                                  "text_post_app_info": {
+                                    "is_reply": true,
+                                    "direct_reply_count": 2,
+                                    "repost_count": 0,
+                                    "quote_count": 0,
+                                    "reply_to_author": { "username": "rootauthor", "id": "63482099442" },
+                                    "share_info": { "quoted_post": null, "reposted_post": null },
+                                    "text_fragments": { "fragments": [
+                                      { "fragment_type": "mention", "mention_fragment": { "mentioned_user": { "username": "rootauthor" } } },
+                                      { "fragment_type": "link", "link_fragment": { "uri": "https://example.org/evidence", "display_text": "example.org/evidence" } }
+                                    ] }
+                                  }
+                                } }
+                              ]
+                            }
+                          },
+                          {
+                            "posts": {
+                              "edges": [
+                                { "node": {
+                                  "pk": "3991244000000000002",
+                                  "id": "3991244000000000002_22222",
+                                  "code": "REPLY2",
+                                  "taken_at": 1790013668,
+                                  "media_type": 1,
+                                  "like_count": 0,
+                                  "caption": { "text": "Second reply with an image and a quote" },
+                                  "user": { "pk": "22222", "username": "replier_two", "full_name": "Replier Two", "is_verified": false },
+                                  "image_versions2": { "candidates": [{ "width": 3072, "height": 4096, "url": "https://cdn.example/reply2.jpg" }] },
+                                  "accessibility_caption": "A painting",
+                                  "text_post_app_info": {
+                                    "is_reply": true,
+                                    "direct_reply_count": 0,
+                                    "repost_count": 0,
+                                    "quote_count": 0,
+                                    "reply_to_author": { "username": "rootauthor", "id": "63482099442" },
+                                    "share_info": {
+                                      "quoted_post": {
+                                        "code": "QUOTED1",
+                                        "taken_at": 1789000000,
+                                        "user": { "pk": "33333", "username": "quoted_author" },
+                                        "caption": { "text": "Quoted post text" },
+                                        "text_post_app_info": { "is_reply": false }
+                                      },
+                                      "reposted_post": null
+                                    },
+                                    "text_fragments": { "fragments": [] }
+                                  }
+                                } }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "relatedPosts": {
+                    "threads": [
+                      { "thread_items": [ { "post": {
+                        "pk": "4000000000000000009",
+                        "id": "4000000000000000009_99999",
+                        "code": "RELATED1",
+                        "taken_at": 1789576162,
+                        "media_type": 19,
+                        "like_count": 88,
+                        "caption": { "text": "Unrelated recommendation" },
+                        "user": { "pk": "99999", "username": "someone_else" },
+                        "text_post_app_info": { "is_reply": false, "direct_reply_count": 1, "share_info": {}, "text_fragments": { "fragments": [] } }
+                      } } ] }
+                    ]
+                  }
+                }
+              }
+            }
+          }]]]
+        }
+      }]]]
+    }
+  ],
+  "graphqlResponse": "for (;;);{\"data\":{\"mediaData\":{\"edges\":[{\"node\":{\"thread_items\":[{\"post\":{\"pk\":\"3991244000000000003\",\"id\":\"3991244000000000003_44444\",\"code\":\"REPLY3\",\"taken_at\":1790020000,\"media_type\":19,\"like_count\":1,\"caption\":{\"text\":\"Reply that only exists in a paginated GraphQL batch\"},\"user\":{\"pk\":\"44444\",\"username\":\"replier_three\"},\"text_post_app_info\":{\"is_reply\":true,\"direct_reply_count\":0,\"reply_to_author\":{\"username\":\"rootauthor\",\"id\":\"63482099442\"},\"share_info\":{},\"text_fragments\":{\"fragments\":[]}}}}]}}]}}}",
+  "domPosts": [
+    { "code": "ROOT1", "author": "rootauthor", "permalink": "https://www.threads.com/@rootauthor/post/ROOT1", "datetime": "2026-09-21T17:55:04.000Z", "datetimeTitle": "Monday, September 21, 2026 at 1:55 PM", "datetimeLabel": "1d", "renderedText": "rootauthor\n1d\nSpotlight: a root post with media\n95\n19\n3\n3", "images": [{ "src": "https://cdn.example/big.jpg", "alt": "" }], "videos": [], "outboundLinks": [], "documentY": 80, "height": 459, "inThreadSection": true, "nestedInCode": null, "html": "<div data-pressable-container><span>rootauthor</span></div>" },
+    { "code": "REPLY1", "author": "replier_one", "permalink": "https://www.threads.com/@replier_one/post/REPLY1", "datetime": "2026-09-21T17:57:37.000Z", "datetimeTitle": "Monday, September 21, 2026 at 1:57 PM", "datetimeLabel": "1d", "renderedText": "replier_one\n1d\nFirst reply, mentions @rootauthor and links\n4", "images": [], "videos": [], "outboundLinks": ["https://example.org/evidence"], "documentY": 539, "height": 108, "inThreadSection": true, "nestedInCode": null, "html": "<div data-pressable-container><span>replier_one</span></div>" },
+    { "code": "REPLY2", "author": "replier_two", "permalink": "https://www.threads.com/@replier_two/post/REPLY2", "datetime": "2026-09-21T18:01:08.000Z", "datetimeTitle": "Monday, September 21, 2026 at 2:01 PM", "datetimeLabel": "1d", "renderedText": "replier_two\n1d\nSecond reply with an image and a quote", "images": [{ "src": "https://cdn.example/reply2.jpg", "alt": "" }], "videos": [], "outboundLinks": [], "documentY": 647, "height": 546, "inThreadSection": true, "nestedInCode": null, "html": "<div data-pressable-container><span>replier_two</span></div>" },
+    { "code": "DOMONLY1", "author": "replier_four", "permalink": "https://www.threads.com/@replier_four/post/DOMONLY1", "datetime": "2026-09-21T21:15:33.000Z", "datetimeTitle": "Monday, September 21, 2026 at 5:15 PM", "datetimeLabel": "1d", "renderedText": "replier_four\n1d\nRendered-only reply (no API data captured)", "images": [], "videos": [], "outboundLinks": [], "documentY": 1854, "height": 108, "inThreadSection": true, "nestedInCode": null, "html": "<div data-pressable-container><span>replier_four</span></div>" },
+    { "code": "RELATED1", "author": "someone_else", "permalink": "https://www.threads.com/@someone_else/post/RELATED1", "datetime": "2026-09-16T16:29:22.000Z", "datetimeTitle": "Wednesday, September 16, 2026 at 12:29 PM", "datetimeLabel": "6d", "renderedText": "someone_else\n6d\nUnrelated recommendation", "images": [], "videos": [], "outboundLinks": [], "documentY": 2286, "height": 545, "inThreadSection": false, "nestedInCode": null, "html": "<div data-pressable-container><span>someone_else</span></div>" }
+  ]
+}
