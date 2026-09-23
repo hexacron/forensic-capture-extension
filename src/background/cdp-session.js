@@ -19,6 +19,13 @@ const PAGE_DETECTABLE_COMMANDS = new Set([
   'Profiler.enable'
 ]);
 
+// chrome.debugger detach reason when the user presses Cancel on Chrome's
+// "… started debugging this browser" bar.
+const DETACH_CANCELLED_BY_USER = 'canceled_by_user';
+
+/** `error.code` of commands sent after the user cancelled the debugging bar. */
+export const DEBUGGING_CANCELLED = 'debugging-cancelled';
+
 export class CdpSession {
   static isSupported() {
     return Boolean(globalThis.chrome && chrome.debugger && chrome.debugger.attach);
@@ -58,6 +65,14 @@ export class CdpSession {
       return Promise.reject(new Error(`${method} is refused: its effect is detectable by the page`));
     }
     if (!this.attached) {
+      if (this.detachReason === DETACH_CANCELLED_BY_USER) {
+        const error = new Error(
+          'Capture stopped: Cancel was pressed on Chrome\'s "started debugging this browser" bar, ' +
+          'which ends the connection the capture uses. Run it again and leave that bar open until it finishes.'
+        );
+        error.code = DEBUGGING_CANCELLED;
+        return Promise.reject(error);
+      }
       return Promise.reject(new Error(`CDP session detached (${this.detachReason || 'unknown'})`));
     }
     return chrome.debugger.sendCommand(this.target, method, params);

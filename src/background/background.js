@@ -8,7 +8,7 @@
 // Import browser API polyfill for cross-browser compatibility
 import '../../lib/browser-polyfill.min.js';
 
-import { CaptureManager } from './capture-manager.js';
+import { CaptureManager, isUserStop } from './capture-manager.js';
 
 // Global capture manager instance
 let captureManager = null;
@@ -161,7 +161,9 @@ async function handleCaptureRequest(message) {
         });
       })
       .catch(error => {
-        console.error('[Background] Capture failed:', error);
+        // A user stop is already logged once by the capture manager; it is not a fault.
+        const userStop = isUserStop(error);
+        if (!userStop) console.error('[Background] Capture failed:', error);
         currentCapture.inProgress = false;
         currentCapture.error = error.message;
 
@@ -170,7 +172,7 @@ async function handleCaptureRequest(message) {
           type: 'CAPTURE_ERROR',
           error: {
             message: error.message,
-            details: error.stack
+            details: userStop ? null : error.stack
           }
         }).catch(err => {
           console.log('[Background] Could not notify popup (may be closed)');

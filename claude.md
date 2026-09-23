@@ -687,6 +687,15 @@ web-ext build
 - **Cause:** the window is minimised or fully covered, so the OS stopped compositing it
 - **Solution:** bring the window to the front and re-run; this is an OS limit, not a bug
 
+### "Capture stopped: Cancel was pressed on Chrome's 'started debugging this browser' bar"
+- **Cause:** that bar owns the `chrome.debugger` connection the capture uses for network
+  recording, trusted input and screenshots; Cancel detaches it (`canceled_by_user`), so every
+  later CDP command fails.
+- **Behavior:** `CdpSession.send` returns that message with `error.code === 'debugging-cancelled'`;
+  `isUserStop()` in capture-manager.js routes it (and the popup's cancel) to a single warning -
+  no error entry, no stack, and no viewport-screenshot fallback.
+- **Solution:** re-run and leave the bar alone until the capture finishes.
+
 ### Threads capture: "Threads refused to open post … (error=invalid_post)" completeness note
 - **Cause:** signed-in Threads can refuse to load a post from its link (redirects to the feed,
   sometimes with `?error=invalid_post`) even though the in-app view shows it. A plain reload of

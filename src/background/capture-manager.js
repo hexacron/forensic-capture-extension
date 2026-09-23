@@ -25,11 +25,20 @@ import { DownloadManager } from './download-manager.js';
 import { sendProgressUpdate } from './background.js';
 import { captureFullPageScreenshot, captureViewportScreenshot } from './screenshot-capture.js';
 import { SocialCaptureSession } from './social-capture.js';
+import { DEBUGGING_CANCELLED } from './cdp-session.js';
 import { detectPost, platformById } from '../social/platforms.js';
 import { renderThreadReport } from '../social/report.js';
 import { createZip } from '../utils/zip-writer.js';
 
 const textEncoder = new TextEncoder();
+
+/**
+ * Whether a capture ended because the user stopped it: the popup's cancel, or Cancel on
+ * Chrome's debugging bar (which detaches the DevTools connection).
+ */
+export function isUserStop(error) {
+  return Boolean(error) && (error.code === DEBUGGING_CANCELLED || error.message === 'Capture cancelled by user');
+}
 
 /**
  * Capture Manager Class
@@ -218,8 +227,13 @@ export class CaptureManager {
           : null
       };
     } catch (error) {
-      console.error('[CaptureManager] Capture failed:', error);
-      logger.logError('Capture failed', error);
+      if (isUserStop(error)) {
+        console.warn('[CaptureManager] Capture stopped:', error.message);
+        logger.logWarning('Capture stopped by the user', { reason: error.message });
+      } else {
+        console.error('[CaptureManager] Capture failed:', error);
+        logger.logError('Capture failed', error);
+      }
       logger.markFailed(error.message);
       throw error;
     } finally {
@@ -265,7 +279,8 @@ export class CaptureManager {
         }
       });
     } catch (error) {
-      if (this.cancelled) throw error;
+      // A stop requested by the user is not a screenshot failure to paper over.
+      if (this.cancelled || isUserStop(error)) throw error;
       logger.logError('Full-page screenshot failed', error);
       logger.logWarning('Attempting fallback to viewport capture');
       try {

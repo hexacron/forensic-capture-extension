@@ -179,7 +179,8 @@ export class AuditLogger {
     const entry = createAuditEntry('error', message, details);
     this.entries.push(entry);
     this.errors.push(entry);
-    console.error('[Audit]', message, details);
+    // chrome://extensions renders object arguments as "[object Object]": put the reason in the text.
+    console.error('[Audit]', details && details.error ? `${message}: ${details.error}` : message, details);
   }
 
   /**

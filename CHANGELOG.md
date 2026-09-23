@@ -43,6 +43,11 @@ The Threads capture is now a generic social post capture with one adapter per pl
 - **Fresh load answered with an error page failed the whole capture** ("Frame with ID 0 is
   showing error page"); it now falls back to the user's tab like a refused load, with a
   completeness note.
+- **Cancelling Chrome's debugging bar was reported as three errors** (a `CDP session detached
+  (canceled_by_user)` stack, `[Audit] Capture failed [object Object]`, and a screenshot
+  fallback attempt). Pressing Cancel there now ends the capture with one warning explaining
+  what happened and how to avoid it; the same applies to cancelling from the popup.
+- **Audit errors printed `[object Object]`**: the reason is now part of the console message.
 
 ### Changed
 
