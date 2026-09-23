@@ -36,7 +36,13 @@ const TAB_ACTIVE_WAIT_MS = 30000;
  * @param {Object} [options]
  * @param {import('./cdp-session.js').CdpSession} [options.cdp] - Use CDP Page.captureScreenshot (no rate limit)
  * @param {number} [options.maxCssHeight] - Hard ceiling in CSS pixels (infinite feeds); defaults to the page height measured before the first frame
+ * @param {'hide'|'crop'} [options.overlays] - 'hide' restyles fixed/sticky overlays after the first frame;
+ *   'crop' leaves the page untouched and cuts the sticky header band out of later frames
  * @param {boolean} [options.hideModals] - Hide modal dialogs and their dimming layer before every frame (sites that re-open login prompts on scroll)
+ * @param {Function} [options.scrollTo] - async (targetTop, position) => void; replaces programmatic scrolling (e.g. trusted wheel input)
+ * @param {Function} [options.settle] - async () => void; wait after each scroll (default 500 ms)
+ * @param {boolean} [options.restoreScroll] - scroll back to the original position afterwards (default true)
+ * @param {boolean} [options.exactFallback] - allow programmatic positioning when custom scrolling cannot move the page (default true)
  * @param {Function} [options.beforeFrame] - Awaited before every frame (e.g. closing a re-opened dialog that scroll-locks the page)
  * @param {Function} [options.onFrame] - Awaited after each frame (e.g. harvesting virtualized content)
  * @param {Function} [options.onProgress] - Called with (framesCaptured, estimatedFrames)
@@ -44,8 +50,22 @@ const TAB_ACTIVE_WAIT_MS = 30000;
  * @returns {Promise<Object>} { segments: [{bytes, width, height}], backend, frames, ... }
  */
 export async function captureFullPageScreenshot(tab, logger, options = {}) {
-  const { cdp = null, maxCssHeight = null, hideModals = false, beforeFrame = null, onFrame = null, onProgress = null, isCancelled = () => false } = options;
+  const {
+    cdp = null,
+    maxCssHeight = null,
+    overlays = 'hide',
+    hideModals = false,
+    scrollTo = null,
+    settle = () => delay(SETTLE_DELAY_MS),
+    restoreScroll = true,
+    exactFallback = true,
+    beforeFrame = null,
+    onFrame = null,
+    onProgress = null,
+    isCancelled = () => false
+  } = options;
   const tabId = tab.id;
+  const scrollPage = scrollTo || (target => callPageTool(tabId, 'scrollToY', target));
 
   await ensurePageTools(tabId);
   const plan = await callPageTool(tabId, 'beginScreenshot');
@@ -60,6 +80,8 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
     scrollHeight: plan.scrollHeight,
     captureHeight: ceiling,
     heightLimitRequested: maxCssHeight,
+    overlays,
+    scrolling: scrollTo ? 'custom (trusted input)' : 'programmatic',
     region: plan.region,
     viewport: plan.viewport,
     devicePixelRatio: plan.devicePixelRatio,
@@ -72,11 +94,45 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
   let frames = 0;
   let truncated = false;
   let fixedHidden = null;
+  let topInset = 0; // 'crop': sticky header band excluded from frames after the first
   let modalOverlaysHidden = 0;
+  let scrollCorrections = 0;
+
+  /**
+   * Scroll so the next frame's visible band starts at `want`. Undershoot is harmless
+   * (frames overlap). Overshoot would leave a gap and no movement would stall the
+   * capture, so both are retried, then fixed with exact positioning.
+   */
+  const advanceTo = async (want) => {
+    const before = await callPageTool(tabId, 'position');
+    const wantedMove = Math.abs(want - before.scrollTop) > 1;
+    await scrollPage(want, before);
+    await settle();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const pos = await callPageTool(tabId, 'position');
+      const overshoot = pos.scrollTop > want + 1;
+      const stuck = wantedMove && Math.abs(pos.scrollTop - before.scrollTop) <= 1;
+      if (!overshoot && !stuck) return pos;
+      scrollCorrections++;
+      await scrollPage(want, pos);
+      await settle();
+    }
+    const pos = await callPageTool(tabId, 'position');
+    const stuck = wantedMove && Math.abs(pos.scrollTop - before.scrollTop) <= 1;
+    const overshoot = pos.scrollTop > want + 1;
+    if (!overshoot && !stuck) return pos;
+    // A page that ignores wheel input (e.g. a scroll-locking dialog) is left alone when an
+    // account is at stake; the caller then ends the screenshot as truncated.
+    if (stuck && !overshoot && !exactFallback) return pos;
+    // Last resort: exact positioning, so the stitched image never has a gap.
+    scrollCorrections++;
+    await callPageTool(tabId, 'scrollToY', want);
+    await settle();
+    return callPageTool(tabId, 'position');
+  };
 
   try {
-    await callPageTool(tabId, 'scrollToY', 0);
-    await delay(SETTLE_DELAY_MS);
+    let pos = await advanceTo(0);
 
     for (;;) {
       if (isCancelled()) throw new Error('Capture cancelled by user');
@@ -92,23 +148,28 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
         const { hidden } = await callPageTool(tabId, 'hideModalOverlays');
         if (hidden) modalOverlaysHidden += hidden;
       }
-      const pos = await callPageTool(tabId, 'position');
+      pos = await callPageTool(tabId, 'position');
       const image = await capturer.capture();
-      await stitcher.addFrame(image, pos.scrollTop, pos.region, ceiling);
+      await stitcher.addFrame(image, pos.scrollTop, pos.region, ceiling, frames === 0 ? 0 : topInset);
       frames++;
 
       if (onProgress) onProgress(frames, Math.max(frames, estimatedFrames));
       if (onFrame) await onFrame(frames);
 
-      if (fixedHidden === null) {
-        fixedHidden = await callPageTool(tabId, 'hideFixedElements');
+      if (frames === 1) {
+        if (overlays === 'crop') {
+          ({ topInset } = await callPageTool(tabId, 'measureTopInset'));
+          topInset = Math.min(topInset, Math.floor(pos.region.height / 3));
+        } else {
+          fixedHidden = await callPageTool(tabId, 'hideFixedElements');
+        }
       }
 
       if (stitcher.coveredCss >= ceiling - 1) break;
 
-      const nextTop = Math.min(pos.scrollTop + pos.region.height, Math.max(0, ceiling - pos.region.height));
-      if (nextTop <= pos.scrollTop) break;
-      const next = await callPageTool(tabId, 'scrollToY', nextTop);
+      const want = Math.min(stitcher.coveredCss - topInset, Math.max(0, ceiling - pos.region.height));
+      if (want <= pos.scrollTop) break;
+      const next = await advanceTo(want);
       if (next.scrollTop <= pos.scrollTop) {
         logger.logWarning('Page stopped scrolling before reaching the end', {
           scrollTop: next.scrollTop,
@@ -117,11 +178,10 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
         truncated = true;
         break;
       }
-      await delay(SETTLE_DELAY_MS);
     }
   } finally {
     try {
-      await callPageTool(tabId, 'endScreenshot');
+      await callPageTool(tabId, 'endScreenshot', restoreScroll);
     } catch (error) {
       logger.logWarning('Failed to restore page state after screenshot', { error: error.message });
     }
@@ -139,8 +199,10 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
     imageScale: stitcher.scale,
     cssWidth: plan.region.width,
     cssHeight: stitcher.coveredCss,
+    overlayHandling: overlays === 'crop' ? `sticky header band of ${topInset}px cropped from frames after the first (page not modified)` : 'fixed/sticky elements hidden after the first frame',
     fixedElementsHidden: fixedHidden ? fixedHidden.hidden : 0,
-    modalOverlaysHidden
+    modalOverlaysHidden,
+    scrollCorrections
   };
 
   logger.logInfo('Full-page screenshot complete', {
@@ -149,6 +211,8 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
     segments: segments.map(s => ({ width: s.width, height: s.height })),
     cssHeight: result.cssHeight,
     imageScale: result.imageScale,
+    overlayHandling: result.overlayHandling,
+    scrollCorrections,
     truncated
   });
 
@@ -230,8 +294,12 @@ class Stitcher {
     this.coveredCss = 0;
   }
 
-  /** @param {number} limitCss - do not place page content below this CSS offset */
-  async addFrame(blob, scrollTop, region, limitCss) {
+  /**
+   * @param {number} limitCss - do not place page content below this CSS offset
+   * @param {number} [topInsetCss] - ignore this many CSS px at the top of the region
+   *   (a sticky header already captured in the first frame)
+   */
+  async addFrame(blob, scrollTop, region, limitCss, topInsetCss = 0) {
     const bitmap = await createImageBitmap(blob);
     try {
       if (this.scale === null) {
@@ -241,7 +309,7 @@ class Stitcher {
       }
       const scale = this.scale;
 
-      const startCss = Math.max(this.coveredCss, scrollTop);
+      const startCss = Math.max(this.coveredCss, scrollTop + topInsetCss);
       const endCss = Math.min(scrollTop + region.height, limitCss);
       if (endCss <= startCss) return;
 

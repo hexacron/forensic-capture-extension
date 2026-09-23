@@ -40,6 +40,7 @@ src/
 │   ├── screenshot-capture.js   # Scroll-and-stitch, segment stitcher, capture backends
 │   ├── threads-capture.js      # Threads session: CDP network capture, reply loading, media
 │   ├── cdp-session.js          # chrome.debugger wrapper (Chromium only)
+│   ├── human-input.js          # Trusted wheel/pointer/key input + careful/fast pacing
 │   ├── page-tools-client.js    # Injects/calls the page toolkit, version-checked
 │   ├── forensic-metadata.js    # Manifest generation
 │   └── download-manager.js     # File downloads (bytes -> data URL)
@@ -49,8 +50,6 @@ src/
 ├── threads/             # Pure logic, no browser APIs (also imported by the popup)
 │   ├── threads-parser.js       # URL parse, API walk, dataset merge, completeness checks
 │   └── threads-report.js       # Static HTML evidence report
-├── injected/            # Page context
-│   └── injected.js             # Storage access (localStorage, IndexedDB)
 ├── popup/               # User interface
 │   ├── popup.html              # Includes the Threads options panel
 │   ├── popup.js
@@ -58,6 +57,7 @@ src/
 └── utils/               # Shared utilities
     ├── crypto-utils.js         # SHA-256 hashing
     ├── encoding-utils.js       # base64 <-> bytes (service-worker safe)
+    ├── zip-writer.js           # Dependency-free ZIP (deflate-raw / store), one download per capture
     ├── timestamp-utils.js      # ISO 8601 timestamps
     ├── logger.js               # Chain of custody
     └── validation.js           # Data validation
@@ -169,9 +169,12 @@ scrollTo(originalX, originalY);  // Restore position
 - New `src/background/threads-capture.js`: attaches `chrome.debugger`, records
   `/api/graphql` response bodies, optionally reloads the page so those responses are seen
   from the first byte, dismisses the login modal, loads all replies, downloads media.
-- New `src/content/page-tools.js`: one versioned toolkit injected into the page; the worker
-  drives it step by step (`beginScreenshot`, `position`, `scrollToY`, `hideFixedElements`,
-  `threadsHarvest`, `threadsLoadStep`, `threadsContentHeight`, …).
+- New `src/content/page-tools.js`: one versioned toolkit injected into the extension's isolated
+  world; the worker drives it step by step (`beginScreenshot`, `position`, `threadsHarvest`,
+  `threadsExpanderTargets`, `threadsLoadState`, `measureTopInset`, …). It reads the page and
+  reports coordinates; it never clicks or restyles anything on Threads.
+- New `src/background/human-input.js`: trusted wheel/pointer/key input via the DevTools
+  protocol and the `careful`/`fast` pacing profiles.
 - Data comes from three sources merged by shortcode: embedded Relay payloads, GraphQL
   responses, and per-post DOM harvested on every scroll step (Threads virtualises its list,
   so a single end-of-capture DOM snapshot misses most posts).
@@ -276,17 +279,18 @@ try {
 }
 ```
 
-### Storage Access via Page Context
+### Storage Access (isolated world only)
 
 ```
-Extension Context → Content Script → Injected Script (Page Context)
-                                     ↓
-                                localStorage/sessionStorage/IndexedDB
-                                     ↓
-                    window.postMessage() bridge
-                                     ↓
-                    Content Script → Background Worker
+Background Worker → content-injector.js (isolated world, same origin storage)
+                      → localStorage / sessionStorage / IndexedDB
+                    ← runtime message response
 ```
+
+Until v1.2.0 storage was read by `src/injected/injected.js`, inserted into the page as a
+`<script>` and bridged with `window.postMessage`. Site scripts could see the script element,
+its console lines and the whole storage payload, and `web_accessible_resources` let any site
+probe for the extension. Both are gone: never run capture code in the page's main world.
 
 ### Threads Capture Pipeline
 
@@ -317,10 +321,11 @@ GraphQL responses, and the rendered text is the only proof of what a viewer actu
 
 ## Files Generated Per Capture
 
-Each capture creates a timestamped folder:
+Each capture is saved as one `forensic-capture-<ts>.zip` (single download; the ZIP's SHA-256 is
+shown in the popup and kept in capture history). Extracted, it is a timestamped folder:
 
 ```
-Downloads/forensic-capture-20260922T143045Z/
+forensic-capture-20260922T143045Z/
 ├── 20260922T143045Z-manifest.json         # Forensic metadata + file hashes
 ├── 20260922T143045Z-screenshot.png        # Full-page screenshot (-partNN.png if very long)
 ├── 20260922T143045Z-dom.json              # HTML structure at end of capture
@@ -493,6 +498,34 @@ extension loaded on a real threads.com post; **open** = not verified yet.
 3. **Polyfill first:** Always inject polyfill before content script
 4. **Version the toolkit:** long-lived pages keep an old copy after an extension reload;
    `page-tools.js` carries `TOOLKIT_VERSION` and is re-injected when it differs
+
+### Account Safety (low automation footprint)
+1. **Never run code in the page's main world** and never expose `web_accessible_resources`;
+   site scripts can see injected `<script>` tags, `postMessage` traffic, console lines, and
+   can probe `chrome-extension://<id>/…` URLs.
+2. **Never mutate the site's DOM on watchful sites** (MutationObserver sees style changes);
+   Threads screenshots crop the sticky header band (`measureTopInset`) instead of hiding it.
+3. **Only trusted input:** `element.click()` and `scrollTo()` are detectable (`isTrusted`
+   false, scroll without wheel). Use `HumanInput` (CDP `Input.dispatchMouseEvent` /
+   `dispatchKeyEvent`); without CDP, do not click at all.
+4. **Never enable Runtime/Debugger/Console/Log/Profiler over CDP** — the stack-getter check
+   detects Runtime. `CdpSession.send` refuses them. Test harnesses must not enable them either
+   (use `Runtime.evaluate` without `Runtime.enable`).
+5. **Verify with a detector, not by reasoning:** install listeners/observers in the page's main
+   world and run a real capture; the pre-safety build tripped six signals.
+6. **Back off, don't insist:** one Escape per dialog (never repeated once futile, max 6), and
+   stop reply loading after 3 wheel steps that do not move the page. A first build pressed
+   Escape 322 times at an unclosable login prompt - that is exactly what bot detection sees.
+7. **Policy by session:** `detectSignedIn()` (Threads `sessionid` cookie). Signed out = no
+   account at risk, so programmatic scroll fallback and modal hiding are allowed; signed in =
+   never. Recorded in the manifest as `threadsCapture.automationFootprint`.
+8. **Genuine clicks act as the account:** hit-test the element under the pointer
+   (`threadsVerifyTarget`) before every press. Pressable post wrappers react to pointer events
+   that only genuine clicks produce.
+9. **Measure the container the input scrolls:** `findScroller()` anchors on the visible post
+   (`visibleThreadsPost` → nearest scrollable ancestor), and `scrollPointer` hit-tests a
+   wheel point whose scroll chain reaches that container. Signed-in Threads has a tall hidden
+   feed behind the opened post, so the document is scrollable but is not what moves.
 
 ### Screenshot Correctness
 1. **Never trust the requested scroll offset:** read it back; browsers clamp at the end

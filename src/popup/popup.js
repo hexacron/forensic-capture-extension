@@ -9,7 +9,8 @@ import { parseThreadsPostUrl, isThreadsUrl } from '../threads/threads-parser.js'
 const THREADS_OPTION_INPUTS = {
   loadAllReplies: 'optLoadAllReplies',
   reloadBeforeCapture: 'optReloadBeforeCapture',
-  downloadMedia: 'optDownloadMedia'
+  downloadMedia: 'optDownloadMedia',
+  carefulPacing: 'optCarefulPacing'
 };
 
 // DOM elements
@@ -261,10 +262,11 @@ function handleCaptureComplete(result) {
   showSection(resultSection);
 
   const rows = [
-    ['Folder', result.folder || '—'],
+    ['Saved as', result.packageFile || '—'],
+    ['Package SHA-256', result.packageSha256 || '—'],
     ['Capture ID', result.captureId],
     ['Timestamp', new Date(result.timestamp).toLocaleString()],
-    ['Files saved', String(result.filesCount || 0)],
+    ['Files in package', String(result.filesCount || 0)],
     ['Total size', formatBytes(result.totalSize || 0)],
     ['Screenshot parts', String(result.screenshotSegments || 0)],
     ['Hash algorithm', 'SHA-256']
@@ -426,7 +428,9 @@ async function addToHistory(capture) {
       timestamp: capture.timestamp,
       url: capture.url || '',
       filesCount: capture.filesCount || 0,
-      totalSize: capture.totalSize || 0
+      totalSize: capture.totalSize || 0,
+      packageFile: capture.packageFile || null,
+      packageSha256: capture.packageSha256 || null
     });
 
     // Keep only last 20 captures

@@ -20,6 +20,7 @@ console.log('hashes.txt content expression:', hashLineSrc.trim());
 const { generateSHA256 } = await import(ROOT + 'src/utils/crypto-utils.js');
 const { renderThreadReport } = await import(ROOT + 'src/threads/threads-report.js');
 const parser = await import(ROOT + 'src/threads/threads-parser.js');
+const { createZip } = await import(ROOT + 'src/utils/zip-writer.js');
 
 const textEncoder = new TextEncoder();
 const helpers = new Function('textEncoder', 'generateSHA256', `${jsonFileSrc}\n${hashFilesSrc}\nreturn { jsonFile, hashFiles };`)(textEncoder, generateSHA256);
@@ -41,7 +42,10 @@ const files = [
   helpers.jsonFile(`${ts}-dom.json`, 'dom', { html: '<html>…</html>', title: 'Thread' }),
   helpers.jsonFile(`${ts}-cookies.json`, 'cookies', [{ name: 'sessionid', value: 'x' }]),
   helpers.jsonFile(`${ts}-thread.json`, 'threads-data', { statistics: dataset.statistics, posts: dataset.posts }),
-  helpers.jsonFile(`raw/${ts}-threads-api-responses.json`, 'threads-api-responses', { responses: [] })
+  helpers.jsonFile(`raw/${ts}-threads-api-responses.json`, 'threads-api-responses', { responses: [] }),
+  // incompressible binary (stored) and a large repetitive JSON (deflated)
+  { path: `media/ROOT1-01.mp4`, type: 'media', mimeType: 'video/mp4', bytes: crypto.getRandomValues(new Uint8Array(60000)) },
+  helpers.jsonFile(`raw/${ts}-threads-dom-posts.json`, 'threads-dom-posts', Array.from({ length: 400 }, (_, i) => ({ code: `P${i}`, html: '<div data-pressable-container>'.repeat(20) })))
 ];
 await helpers.hashFiles(files);
 const evidenceFiles = [...files]; // what the report was handed, before it exists itself
@@ -75,16 +79,31 @@ const all = [...files, manifest];
 const hashListBytes = textEncoder.encode(new Function('files', `return ${hashLineSrc}`)(all));
 
 // ---------------------------------------------------------------------------
-// Write everything out and verify with the real checksum tool
+// Package exactly as capture-manager.savePackage does (one ZIP with the capture
+// folder inside), extract it with the system unzip, and verify with shasum -c.
 // ---------------------------------------------------------------------------
-const dir = '/tmp/evidence-verify';
-rmSync(dir, { recursive: true, force: true });
-mkdirSync(dir + '/raw', { recursive: true });
-for (const f of all) writeFileSync(`${dir}/${f.path}`, f.bytes);
-writeFileSync(`${dir}/${ts}-hashes.txt`, hashListBytes);
+const folder = `forensic-capture-${ts}`;
+const archive = await createZip(
+  [...all, { path: `${ts}-hashes.txt`, bytes: hashListBytes }].map(f => ({ path: `${folder}/${f.path}`, bytes: f.bytes })),
+  new Date('2026-09-22T03:00:00.000Z')
+);
+const work = '/tmp/evidence-verify';
+rmSync(work, { recursive: true, force: true });
+mkdirSync(work, { recursive: true });
+writeFileSync(`${work}/${folder}.zip`, archive);
+const dir = `${work}/${folder}`;
 
 let failures = 0;
 const check = (label, ok, detail = '') => { if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '  -> ' + detail : ''}`); };
+
+console.log('== evidence package (zip) ==');
+const integrity = await $`unzip -tq ${folder}.zip`.cwd(work).nothrow().quiet();
+check('unzip -t reports no errors (CRCs, offsets, compression)', integrity.exitCode === 0, new TextDecoder().decode(integrity.stdout).trim());
+const extract = await $`unzip -q ${folder}.zip`.cwd(work).nothrow().quiet();
+check('archive extracts', extract.exitCode === 0, new TextDecoder().decode(extract.stderr).trim());
+check('extracted into one capture folder with raw/ and media/', ['raw', 'media'].every(d => Bun.file(`${dir}/${d}`).size !== undefined) && (await $`ls ${dir}`.quiet().text()).includes(`${ts}-manifest.json`));
+const sumRaw = [...all].reduce((n, f) => n + f.bytes.length, 0);
+check('text evidence is compressed, binary evidence stored', archive.length < sumRaw, `${archive.length} bytes zipped vs ${sumRaw} raw`);
 
 console.log('\n== hashes.txt ==');
 const hashText = new TextDecoder().decode(hashListBytes);
@@ -96,7 +115,7 @@ check('report is listed', hashText.includes(`${ts}-thread-report.html`));
 
 const verify = await $`shasum -a 256 -c ${ts}-hashes.txt`.cwd(dir).nothrow().quiet();
 console.log(new TextDecoder().decode(verify.stdout).trim());
-check('shasum -a 256 -c verifies every file', verify.exitCode === 0, `exit=${verify.exitCode} ${new TextDecoder().decode(verify.stderr).trim()}`);
+check('shasum -a 256 -c verifies every extracted file', verify.exitCode === 0, `exit=${verify.exitCode} ${new TextDecoder().decode(verify.stderr).trim()}`);
 
 console.log('\n== manifest self-reference ==');
 const manifestJson = JSON.parse(new TextDecoder().decode(manifest.bytes));

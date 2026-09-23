@@ -8,6 +8,17 @@
 
 const PROTOCOL_VERSION = '1.3';
 
+// Commands whose effect is observable from page JavaScript (e.g. Runtime.enable makes
+// console argument serialization run page getters, a well-known automation check).
+// Captures of watchful sites must never switch these on, so they are refused here.
+const PAGE_DETECTABLE_COMMANDS = new Set([
+  'Runtime.enable',
+  'Debugger.enable',
+  'Console.enable',
+  'Log.enable',
+  'Profiler.enable'
+]);
+
 export class CdpSession {
   static isSupported() {
     return Boolean(globalThis.chrome && chrome.debugger && chrome.debugger.attach);
@@ -43,6 +54,9 @@ export class CdpSession {
   }
 
   send(method, params = {}) {
+    if (PAGE_DETECTABLE_COMMANDS.has(method)) {
+      return Promise.reject(new Error(`${method} is refused: its effect is detectable by the page`));
+    }
     if (!this.attached) {
       return Promise.reject(new Error(`CDP session detached (${this.detachReason || 'unknown'})`));
     }

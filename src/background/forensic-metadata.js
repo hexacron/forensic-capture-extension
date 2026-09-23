@@ -192,7 +192,7 @@ export async function generateForensicManifest(captureData, logger) {
         ? `${captureData.screenshotInfo.backend} (scroll-and-stitch)`
         : 'none',
       domCaptureMethod: 'document.documentElement.outerHTML',
-      storageCaptureMethod: 'Page context injection with postMessage bridge',
+      storageCaptureMethod: 'Isolated-world content script reading the page origin\'s storage (nothing injected into the page)',
       cookieCaptureMethod: 'browser.cookies.getAll()',
       hashingMethod: 'crypto.subtle.digest("SHA-256")'
     }
@@ -209,7 +209,7 @@ function getCaptureMethod(type, captureData) {
   const methods = {
     'screenshot': `Scroll-and-stitch full-page capture via ${screenshotBackend}, PNG`,
     'dom': 'Content script access to document.documentElement.outerHTML at end of capture',
-    'storage': 'Injected page-context script with postMessage bridge (localStorage, sessionStorage, IndexedDB)',
+    'storage': 'Isolated-world content script reading localStorage, sessionStorage and IndexedDB of the page origin (nothing injected into the page)',
     'cookies': 'browser.cookies.getAll() with full cookie attributes',
     'threads-data': 'Normalized Threads posts merged from embedded Relay data, GraphQL responses and rendered DOM',
     'threads-report': 'Human-readable HTML rendering of the Threads data file',
@@ -234,7 +234,7 @@ function buildCaptureConstraints(captureData) {
 
   // Add specific constraints based on what was captured
   if (captureData.screenshotInfo) {
-    constraints.push('Full-page screenshot is stitched from sequential viewport captures; fixed/sticky overlays appear only in the first frame');
+    constraints.push(`Full-page screenshot is stitched from sequential viewport captures; ${captureData.screenshotInfo.overlayHandling || 'fixed/sticky overlays appear only in the first frame'}`);
     if (captureData.screenshotInfo.modalOverlaysHidden) {
       constraints.push(`${captureData.screenshotInfo.modalOverlaysHidden} modal dialog overlay(s) (e.g. login prompts) were hidden before screenshot frames so they would not cover the content`);
     }

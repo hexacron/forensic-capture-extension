@@ -27,6 +27,7 @@ import { captureFullPageScreenshot, captureViewportScreenshot } from './screensh
 import { ThreadsCaptureSession } from './threads-capture.js';
 import { parseThreadsPostUrl } from '../threads/threads-parser.js';
 import { renderThreadReport } from '../threads/threads-report.js';
+import { createZip } from '../utils/zip-writer.js';
 
 const textEncoder = new TextEncoder();
 
@@ -140,6 +141,8 @@ export class CaptureManager {
         cssHeight: screenshot.cssHeight ?? null,
         fixedElementsHidden: screenshot.fixedElementsHidden ?? 0,
         modalOverlaysHidden: screenshot.modalOverlaysHidden ?? 0,
+        overlayHandling: screenshot.overlayHandling ?? null,
+        scrollCorrections: screenshot.scrollCorrections ?? 0,
         segments: screenshot.segments.map(s => ({ width: s.width, height: s.height }))
       };
       logger.logChain(Action.SCREENSHOT_COMPLETED, Actor.AUTOMATED, { segments: screenshot.segments.length });
@@ -181,10 +184,10 @@ export class CaptureManager {
       const manifestFile = await this.createManifest(captureData, files, logger);
       logger.logChain(Action.MANIFEST_CREATED, Actor.AUTOMATED);
 
-      this.updateProgress('download', 95, 'Saving evidence files...');
+      this.updateProgress('download', 95, 'Packaging and saving evidence...');
       const folderName = `forensic-capture-${timestamp}`;
-      await this.downloadFiles(folderName, timestamp, [...files, manifestFile], logger);
-      logger.logChain(Action.DOWNLOAD_COMPLETED, Actor.AUTOMATED);
+      const saved = await this.savePackage(folderName, timestamp, [...files, manifestFile], captureData.timestamp, logger);
+      logger.logChain(Action.DOWNLOAD_COMPLETED, Actor.AUTOMATED, { package: saved.filename, sha256: saved.sha256 });
 
       this.updateProgress('complete', 100, 'Capture complete');
       logger.markCompleted();
@@ -197,6 +200,9 @@ export class CaptureManager {
         timestamp: captureData.timestamp,
         url: tab.url,
         folder: folderName,
+        packageFile: saved.filename,
+        packageSha256: saved.sha256,
+        packageSize: saved.size,
         filesCount: allFiles.length + 1, // + hashes file
         totalSize: allFiles.reduce((sum, f) => sum + f.size, 0),
         screenshotSegments: captureData.screenshotSegments.length,
@@ -233,7 +239,16 @@ export class CaptureManager {
       return await captureFullPageScreenshot(tab, logger, {
         cdp: threads ? threads.cdp : null,
         maxCssHeight: threads ? await threads.screenshotHeightLimit() : null,
-        hideModals: Boolean(threads),
+        // Threads: leave the page unmodified (crop the sticky header band instead of
+        // restyling it), scroll with trusted wheel input and human-paced settling.
+        overlays: threads ? 'crop' : 'hide',
+        restoreScroll: !threads,
+        // Signed out there is no account at stake: hide login prompts and allow exact
+        // programmatic positioning when wheel scrolling cannot move the page.
+        hideModals: Boolean(threads) && !threads.signedIn,
+        exactFallback: !(threads && threads.signedIn),
+        scrollTo: threads && threads.human ? (target, position) => threads.screenshotScrollTo(target, position) : null,
+        settle: threads ? () => threads.screenshotSettle() : undefined,
         beforeFrame: threads ? () => threads.dismissDialogs() : null,
         onFrame: threads ? () => threads.harvestVisible() : null,
         isCancelled: () => this.cancelled,
@@ -491,38 +506,34 @@ export class CaptureManager {
   }
 
   /**
-   * Download all files plus the hash list into the capture folder.
+   * Save the capture as one ZIP (one download, so one save prompt): the capture
+   * folder with every evidence file plus hashes.txt. The archive's own SHA-256 is
+   * returned for the popup and capture history; it cannot be stored inside itself.
    */
-  async downloadFiles(folderName, timestamp, files, logger) {
-    logger.logChain(Action.DOWNLOAD_INITIATED, Actor.AUTOMATED, { folder: folderName, files: files.length + 1 });
-
+  async savePackage(folderName, timestamp, files, capturedAt, logger) {
     const hashList = {
       path: `${timestamp}-hashes.txt`,
-      mimeType: 'text/plain',
       bytes: textEncoder.encode(files.map(f => `${f.sha256}  ${f.path}`).join('\n') + '\n')
     };
-
-    const results = await this.downloadManager.downloadFiles(
-      [...files, hashList].map(f => ({
-        filename: f.path,
-        bytes: f.bytes,
-        mimeType: f.mimeType,
-        folderName
-      }))
+    const archive = await createZip(
+      [...files, hashList].map(f => ({ path: `${folderName}/${f.path}`, bytes: f.bytes })),
+      new Date(capturedAt)
     );
+    const sha256 = await generateSHA256(archive);
+    const filename = `${folderName}.zip`;
+    logger.logChain(Action.DOWNLOAD_INITIATED, Actor.AUTOMATED, { package: filename, files: files.length + 1, size: archive.length, sha256 });
 
-    const failed = results.filter(r => !r.success);
-    if (failed.length) {
-      for (const failure of failed) {
-        logger.logChain(Action.DOWNLOAD_FAILED, Actor.AUTOMATED, { file: failure.filename, error: failure.error });
-      }
-      throw new Error(`File download failed for ${failed.length} file(s): ${failed.map(f => f.filename).join(', ')}`);
+    const [result] = await this.downloadManager.downloadFiles([
+      { filename, bytes: archive, mimeType: 'application/zip' }
+    ]);
+    if (!result || !result.success) {
+      const error = result ? result.error : 'no download result';
+      logger.logChain(Action.DOWNLOAD_FAILED, Actor.AUTOMATED, { package: filename, error });
+      throw new Error(`Saving ${filename} failed: ${error}`);
     }
 
-    logger.logInfo('Files downloaded to folder', {
-      folder: folderName,
-      count: results.length
-    });
+    logger.logInfo('Evidence package saved', { package: filename, files: files.length + 1, size: archive.length, sha256 });
+    return { filename, sha256, size: archive.length };
   }
 }
 

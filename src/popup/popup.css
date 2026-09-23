@@ -250,6 +250,7 @@ body {
   margin-bottom: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid #c8e6c9;
+  overflow-wrap: anywhere;
 }
 
 .result-item:last-child {

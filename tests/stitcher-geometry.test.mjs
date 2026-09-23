@@ -32,7 +32,7 @@ globalThis.createImageBitmap = async (frame) => ({ ...frame, close() {} });
 
 const module = new Function(`${consts}\n${stitcherSrc}\nreturn Stitcher;`)();
 
-function run({ viewportCss, region, scale, scrollTops, pageHeight, ceiling }) {
+function run({ viewportCss, region, scale, scrollTops, pageHeight, ceiling, topInset = 0 }) {
   draws.length = 0;
   const stitcher = new module(viewportCss.width, region);
   const frames = [];
@@ -41,8 +41,9 @@ function run({ viewportCss, region, scale, scrollTops, pageHeight, ceiling }) {
     frames.push({ frame, scrollTop });
   }
   return (async () => {
-    for (const { frame, scrollTop } of frames) {
-      await stitcher.addFrame(frame, scrollTop, region, ceiling ?? pageHeight);
+    for (const [index, { frame, scrollTop }] of frames.entries()) {
+      // like captureFullPageScreenshot: the sticky header band is skipped after the first frame
+      await stitcher.addFrame(frame, scrollTop, region, ceiling ?? pageHeight, index === 0 ? 0 : topInset);
     }
     const segments = await stitcher.finish();
     return { stitcher, segments, draws: draws.filter(d => !d.copy) };
@@ -138,6 +139,31 @@ function check(label, condition, detail = '') {
   check('source x offset = region.left * scale', draws.every(d => d.sx === 120), JSON.stringify(draws.map(d => d.sx)));
   check('first source row = region.top * scale', draws[0].sy === 160, `sy=${draws[0].sy}`);
   check('last frame cropped to the ceiling', draws[draws.length - 1].dh === (ceiling - 1400) * scale, `dh=${draws[draws.length - 1].dh}`);
+}
+
+// ---------------------------------------------------------------------------
+// Case 4: sticky header cropped instead of hidden (page left unmodified)
+// ---------------------------------------------------------------------------
+{
+  const viewportCss = { width: 1280, height: 900 };
+  const region = { left: 0, top: 0, width: 1280, height: 900 };
+  const scale = 2;
+  const topInset = 60; // sticky header height
+  const pageHeight = 3000;
+  // captureFullPageScreenshot scrolls so each new frame's band below the header
+  // starts where coverage ended: next scrollTop = covered - topInset
+  const scrollTops = [0, 840, 1680, 2100]; // last one clamped at pageHeight - viewport
+  const { stitcher, segments, draws } = await run({ viewportCss, region, scale, scrollTops, pageHeight, topInset });
+
+  console.log('\n== Case 4: 60px sticky header cropped from frames after the first, DPR 2 ==');
+  check('covered the whole page', stitcher.coveredCss === pageHeight, `covered=${stitcher.coveredCss}`);
+  const total = segments.reduce((s, x) => s + x.height, 0);
+  check('image height = page * scale (header not duplicated)', total === pageHeight * scale, `height=${total}`);
+  check('first frame keeps the header (source from the top)', draws[0].sy === 0);
+  check('later frames start below the header band', draws.slice(1).every(d => d.sy >= topInset * scale), JSON.stringify(draws.map(d => d.sy)));
+  let cursor = 0;
+  const contiguous = draws.every(d => { const ok = d.dy === cursor % stitcher.segmentHeight; cursor += d.dh; return ok; });
+  check('draws are contiguous (no gap where the header was cropped)', contiguous, JSON.stringify(draws.map(d => [d.dy, d.dh])));
 }
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);

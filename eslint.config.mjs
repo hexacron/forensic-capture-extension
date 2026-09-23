@@ -6,7 +6,7 @@ const browserGlobals = Object.fromEntries([
   'OffscreenCanvas', 'createImageBitmap', 'crypto', 'atob', 'btoa', 'fetch', 'setTimeout',
   'clearTimeout', 'console', 'Blob', 'URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder',
   'Node', 'FileReader', 'indexedDB', 'localStorage', 'sessionStorage', 'unescape', 'self',
-  'globalThis', 'Response'
+  'globalThis', 'Response', 'CompressionStream'
 ].map(name => [name, 'readonly']));
 
 export default [

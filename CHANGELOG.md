@@ -38,9 +38,58 @@ thread mode and captures the post together with its replies.
 - **Login prompts / modal dialogs** are dismissed before every reply-loading round and
   screenshot frame (they scroll-lock the page) and hidden if they reappear; the count is in
   the manifest.
+- **One download per capture** — the capture folder is saved as a single
+  `forensic-capture-<timestamp>.zip` instead of one download per file, so Chrome's "ask where
+  to save" prompt appears once. File bytes inside are unchanged (text deflated, media stored),
+  so `hashes.txt` verifies after unzipping; the ZIP's own SHA-256 is shown in the popup and
+  stored in the capture history.
+- **Hidden feed posts excluded** — signed-in Threads keeps the feed mounted but hidden behind a
+  post opened in-app; posts from that hidden layer were harvested as replies. Only displayed
+  posts are harvested now.
+- **Account safety (low automation footprint)** — captures should not look like a bot to
+  Threads:
+  - Storage is read from the extension's isolated world. The old page-context script
+    (`src/injected/injected.js`) is removed: it inserted a `chrome-extension://` script tag,
+    broadcast the storage dump with `window.postMessage` and logged to the page console, and
+    `web_accessible_resources` let any site probe for the extension.
+  - Scrolling, "show more replies" clicks and Escape presses are genuine browser input
+    (DevTools protocol Input domain) instead of `scrollTo()` jumps and scripted `.click()`
+    (`isTrusted === false`). Before each click the pointer is moved to the button and the
+    element under it is hit-tested; anything other than the expander is never pressed,
+    since a genuine click acts as the signed-in account.
+  - Threads screenshots crop the sticky header band instead of restyling page elements.
+  - `CdpSession` refuses `Runtime/Debugger/Console/Log/Profiler.enable`, whose effects page
+    code can detect.
+  - New **Careful pacing** option (default on): randomised pauses, partial scrolls, reply
+    fetches capped at 10 per minute.
+  - Escape is pressed at most once per dialog (max 6 per capture); reply loading stops if wheel
+    scrolling no longer moves the page. Signed-out captures (no `sessionid` cookie, no account
+    at risk) may fall back to programmatic scrolling and hide login prompts; the manifest
+    records the policy under `threadsCapture.automationFootprint`.
+  - Verified with an in-page detector (untrusted events, style mutations, injected scripts,
+    `postMessage`, console hooks, the `Runtime.enable` stack-getter check) on a real Threads
+    capture: the previous build tripped six signals (synthetic click, scroll without wheel,
+    4 style mutations, injected script exposing the extension id, 2 broadcast messages,
+    4 console lines). Signed-in policy: none. Signed-out policy: only the documented login-
+    prompt hiding.
 
 ### 🐛 Bug Fixes
 
+- **Signed-in captures did not scroll.** Signed in, Threads keeps the feed mounted (hidden)
+  while an opened post scrolls in its own layer. The tall hidden feed made the toolkit measure
+  the document, which never moves, so after 3 wheel steps reply loading stopped with
+  `page-not-scrolling` and the screenshot was truncated. The scroll container is now the
+  nearest scrollable ancestor of the visible posts. Each wheel event goes to a hit-tested point
+  where the wheel actually scrolls that container, with a real PageDown key press as a second
+  genuine-input attempt. `threadsCapture.replyLoading.scrolling` in the manifest records the
+  detected container and which inputs moved the page.
+- **Signed-in captures crawled (careful pacing).** The 10-per-minute reply-fetch cap counted
+  every GraphQL request. Signed-in Threads polls about 12 times a minute on its own (like
+  counts, notification badge, screen time); in one real capture only 2 of 75 requests were
+  reply fetches. The capture therefore waited before almost every step (39 waits, 8 rounds in
+  5.3 minutes). Only content fetches (`…Replies…`, `…Pagination…`, `…PostPage…`; unnamed
+  operations too, to stay cautious) now count toward the cap and the network-idle wait. The
+  manifest reports the rest as `automationFootprint.backgroundGraphqlRequestsNotRateLimited`.
 - **Screenshots were wrong on HiDPI/Retina displays.** The stitcher mixed CSS pixels
   with the device pixels that `captureVisibleTab` returns, so only the top-left
   quarter of each frame was drawn at 2× scale. Scale is now derived from the captured

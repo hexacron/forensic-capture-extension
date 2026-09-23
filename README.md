@@ -71,7 +71,7 @@ A cross-browser extension for forensic data capture from web browsers. Captures 
 
 1. Open the post's own page: `https://www.threads.com/@user/post/CODE`
    (a profile or feed page is not enough - the popup asks for a post page)
-2. Click the extension icon. The popup shows **Threads post detected** with three options:
+2. Click the extension icon. The popup shows **Threads post detected** with four options:
    - **Load all replies** - scroll and expand the thread until no new replies appear
    - **Load the post fresh** - open the post's own link in a new tab so its API responses are
      recorded as evidence; the new tab is closed afterwards and your tab is left as it was.
@@ -79,18 +79,61 @@ A cross-browser extension for forensic data capture from web browsers. Captures 
      `?error=invalid_post`), the post is captured as displayed in your tab instead and the
      report says so
    - **Download media** - save post images and videos next to the evidence files
+   - **Careful pacing** (on by default) - scroll and pause like a person reading and cap how
+     often replies are fetched; see *Protecting the capturing account* below
 3. Click **Capture Post + Replies** and leave the window in the foreground.
    Chrome displays a "being debugged" bar for the duration; that is the extension
    recording API traffic and taking screenshots.
 4. Log in to Threads first if the thread is only fully visible to signed-in accounts -
    the capture records exactly what that account can see.
 
-Long threads take a while: reply loading runs in ~1.5 s rounds and the screenshot is
-taken one viewport at a time.
+With careful pacing a long thread takes several minutes (roughly 2-4 s per scroll step and
+at most 10 reply-page fetches per minute); the screenshot is taken one viewport at a time.
+
+### Protecting the capturing account
+
+Capturing from an account you want to keep (e.g. an investigation account) should not look
+like automation to Threads. What the extension does so that site scripts see an ordinary
+visitor:
+
+- **Nothing runs in the page.** All page reading happens in the extension's isolated world;
+  no scripts are inserted, nothing is posted on `window`, nothing is logged to the page
+  console, and no extension file is exposed to websites (so sites cannot probe for it).
+- **The page is not modified.** Threads screenshots crop the sticky header out of later
+  frames instead of restyling it.
+- **Only genuine input events.** Scrolling uses mouse-wheel events, "show more replies" is
+  pressed with a real mouse click (after moving the pointer there), dialogs are closed with a
+  real Escape key press. Without the DevTools protocol (Firefox/Safari) nothing is clicked.
+- **Clicks are verified before they happen.** A genuine click acts as your account, so the
+  pointer is moved first and the button is only pressed if the element under the pointer is
+  that "show more replies" control (not a post, link, like or follow button); otherwise the
+  click is skipped and logged.
+- **No detectable DevTools domains.** The DevTools connection never enables the `Runtime`,
+  `Debugger`, `Console`, `Log` or `Profiler` domains, whose effects page code can observe;
+  the code refuses those commands.
+- **It backs off instead of insisting.** Escape is pressed at most once per dialog (never
+  again if it did not work, at most 6 per capture), and if wheel scrolling stops moving the
+  page (e.g. a blocking prompt), reply loading stops with a note in the report rather than
+  repeating input at an unresponsive page.
+- **Signed-out captures** (no Threads `sessionid` cookie, so no account at risk) are allowed
+  robust fallbacks: programmatic scrolling when a login prompt locks the page, and hiding that
+  prompt during screenshots. The manifest records which policy applied (`automationFootprint`).
+- **Human pacing** (Careful pacing option): randomised reading pauses, partial-viewport
+  scrolls, occasional longer stops, and a cap on reply-page fetches per minute.
+
+What it cannot hide: the account still loads every reply you capture (volume), requests still
+come from your IP, Chrome shows its "being debugged" bar to *you* (not to the site), and
+"Load the post fresh" opens the post link once more in a new tab. No tool can guarantee that
+a platform will not flag an account; very large threads mean many requests however they are
+paced.
 
 ### Captured Files
 
-Every capture creates `forensic-capture-YYYYMMDDTHHmmssZ/` containing:
+Every capture is saved as **one file**, `forensic-capture-YYYYMMDDTHHmmssZ.zip` (a single
+download, so at most one save prompt). The popup shows the ZIP's SHA-256 and it is kept in the
+capture history; record it in your notes, as an archive cannot contain its own hash.
+
+Unzipping gives the folder `forensic-capture-YYYYMMDDTHHmmssZ/` containing:
 
 - `YYYYMMDDTHHmmssZ-manifest.json` - Forensic manifest with metadata and file hashes
 - `YYYYMMDDTHHmmssZ-screenshot.png` - Full-page screenshot (`-partNN.png` for very long pages)
@@ -110,7 +153,7 @@ Threads captures additionally contain:
 
 ### Verifying Integrity
 
-From inside the capture folder:
+Unzip the package, then from inside the extracted capture folder:
 
 ```bash
 # macOS
@@ -147,16 +190,13 @@ forensic-capture-extension/
 │   │   ├── forensic-metadata.js    # Manifest generation
 │   │   └── download-manager.js     # File downloads
 │   │
-│   ├── content/                    # Scripts injected into pages
-│   │   ├── content-injector.js     # DOM/storage bridge (message handler)
+│   ├── content/                    # Extension isolated-world scripts (never page context)
+│   │   ├── content-injector.js     # DOM + storage capture (message handler)
 │   │   └── page-tools.js           # Scrolling, harvesting, overlay handling
 │   │
 │   ├── threads/                    # Pure Threads logic (no browser APIs)
 │   │   ├── threads-parser.js       # URL parsing, API extraction, thread dataset
 │   │   └── threads-report.js       # HTML evidence report
-│   │
-│   ├── injected/                   # Page-context script
-│   │   └── injected.js             # Storage capture (localStorage, etc.)
 │   │
 │   ├── popup/                      # User interface
 │   │   ├── popup.html              # Popup UI
@@ -166,6 +206,7 @@ forensic-capture-extension/
 │   └── utils/                      # Utility modules
 │       ├── crypto-utils.js         # SHA-256 hashing
 │       ├── encoding-utils.js       # base64 <-> bytes
+│       ├── zip-writer.js           # Packages each capture as one ZIP
 │       ├── timestamp-utils.js      # ISO 8601 timestamps
 │       ├── logger.js               # Forensic logging
 │       └── validation.js           # Data validation

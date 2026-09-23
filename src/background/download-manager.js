@@ -97,10 +97,12 @@ export class DownloadManager {
    */
   async waitForDownload(downloadId) {
     return new Promise((resolve, reject) => {
+      // Writing a data URL is near-instant; a long wait means the user is in Chrome's
+      // "ask where to save" dialog (cancelling it reports 'interrupted' below).
       const timeout = setTimeout(() => {
         cleanup();
         reject(new Error('Download timeout'));
-      }, 60000); // 60 second timeout
+      }, 15 * 60 * 1000);
 
       const onChanged = (delta) => {
         if (delta.id === downloadId) {
