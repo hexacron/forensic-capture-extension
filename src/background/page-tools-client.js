@@ -6,7 +6,7 @@ import '../../lib/browser-polyfill.min.js';
 
 const PAGE_TOOLS_FILE = 'src/content/page-tools.js';
 // Must match TOOLKIT_VERSION in page-tools.js.
-const PAGE_TOOLS_VERSION = 8;
+const PAGE_TOOLS_VERSION = 9;
 
 /**
  * Inject the page toolkit into the tab's isolated world unless a copy of the

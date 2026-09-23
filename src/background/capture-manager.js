@@ -2,7 +2,7 @@
  * Capture Manager for Exhibit
  *
  * Orchestrates the entire forensic capture process including:
- * - Threads post preparation (reply loading) when the tab is a Threads post
+ * - Social post preparation (reply loading) when the tab is a Threads, Instagram or X post
  * - Full-page screenshot capture
  * - DOM structure capture
  * - Browser storage capture (cookies, localStorage, sessionStorage, IndexedDB)
@@ -24,9 +24,9 @@ import { generateForensicManifest } from './forensic-metadata.js';
 import { DownloadManager } from './download-manager.js';
 import { sendProgressUpdate } from './background.js';
 import { captureFullPageScreenshot, captureViewportScreenshot } from './screenshot-capture.js';
-import { ThreadsCaptureSession } from './threads-capture.js';
-import { parseThreadsPostUrl } from '../threads/threads-parser.js';
-import { renderThreadReport } from '../threads/threads-report.js';
+import { SocialCaptureSession } from './social-capture.js';
+import { detectPost, platformById } from '../social/platforms.js';
+import { renderThreadReport } from '../social/report.js';
 import { createZip } from '../utils/zip-writer.js';
 
 const textEncoder = new TextEncoder();
@@ -71,7 +71,7 @@ export class CaptureManager {
   /**
    * Start forensic capture for a tab
    * @param {Object} tab - Browser tab object
-   * @param {Object} [options] - { threadsMode: boolean, threads: ThreadsCaptureSession options }
+   * @param {Object} [options] - { social: SocialCaptureSession options }
    * @returns {Promise<Object>} Capture result
    */
   async startCapture(tab, options = {}) {
@@ -79,20 +79,20 @@ export class CaptureManager {
 
     const captureId = crypto.randomUUID();
     const timestamp = getFilenameTimestamp();
-    const threadsTarget = options.threadsMode === false ? null : parseThreadsPostUrl(tab.url);
+    const post = detectPost(tab.url);
 
     const logger = createForensicLogger(captureId);
     logger.logChain(Action.CAPTURE_INITIATED, Actor.USER, {
       url: tab.url,
       title: tab.title,
       tabId: tab.id,
-      mode: threadsTarget ? 'threads-post' : 'generic',
+      mode: post ? `${post.platform.id}-post` : 'generic',
       options
     });
     logger.incrementAttempts();
 
     this.cancelled = false;
-    let threads = null;
+    let social = null;
 
     try {
       this.updateProgress('init', 3, 'Initializing capture...');
@@ -107,30 +107,32 @@ export class CaptureManager {
         tabId: tab.id
       };
 
-      // The tab the evidence is taken from. A Threads session may load the post fresh
+      // The tab the evidence is taken from. A social session may load the post fresh
       // in its own tab, leaving the user's tab untouched.
       let captureTab = tab;
-      if (threadsTarget) {
-        threads = new ThreadsCaptureSession({
+      if (post) {
+        social = new SocialCaptureSession({
           tab,
-          target: threadsTarget,
+          platform: post.platform,
+          target: post.target,
           logger,
-          options: options.threads,
+          options: options.social,
           isCancelled: () => this.cancelled,
-          progress: (percent, detail) => this.updateProgress('threads', percent, detail)
+          progress: (percent, detail) => this.updateProgress('social', percent, detail)
         });
-        this.updateProgress('threads', 5, 'Preparing Threads capture...');
-        await threads.prepare();
-        captureTab = threads.tab;
+        this.updateProgress('social', 5, `Preparing ${post.platform.label} capture...`);
+        await social.prepare();
+        captureTab = social.tab;
         captureData.captureTabId = captureTab.id;
-        await threads.loadAllReplies();
-        logger.logChain(Action.THREADS_REPLIES_LOADED, Actor.AUTOMATED, threads.loadSummary);
+        await social.loadAllReplies();
+        logger.logChain(Action.REPLIES_LOADED, Actor.AUTOMATED, social.loadSummary);
         this.throwIfCancelled();
       }
 
       this.updateProgress('screenshot', 45, 'Capturing full-page screenshot...');
-      const screenshot = await this.captureScreenshot(captureTab, logger, threads);
+      const screenshot = await this.captureScreenshot(captureTab, logger, social);
       captureData.screenshotSegments = screenshot.segments;
+      captureData.screenshotContext = screenshot.contextImage || null;
       captureData.screenshotInfo = {
         backend: screenshot.backend,
         frames: screenshot.frames,
@@ -163,9 +165,9 @@ export class CaptureManager {
       logger.logChain(Action.STORAGE_CAPTURED, Actor.AUTOMATED);
       this.throwIfCancelled();
 
-      if (threads) {
-        captureData.threads = await threads.finalize();
-        logger.logChain(Action.THREADS_DATA_EXTRACTED, Actor.AUTOMATED, captureData.threads.dataset.statistics);
+      if (social) {
+        captureData.social = await social.finalize();
+        logger.logChain(Action.THREAD_DATA_EXTRACTED, Actor.AUTOMATED, captureData.social.dataset.statistics);
         this.throwIfCancelled();
       }
 
@@ -173,7 +175,7 @@ export class CaptureManager {
       const files = this.buildEvidenceFiles(captureData);
       await hashFiles(files);
 
-      if (captureData.threads) {
+      if (captureData.social) {
         const report = await this.buildThreadReport(captureData, files);
         await hashFiles([report]);
         files.push(report);
@@ -206,8 +208,13 @@ export class CaptureManager {
         filesCount: allFiles.length + 1, // + hashes file
         totalSize: allFiles.reduce((sum, f) => sum + f.size, 0),
         screenshotSegments: captureData.screenshotSegments.length,
-        threads: captureData.threads
-          ? { ...captureData.threads.dataset.statistics, warnings: captureData.threads.dataset.warnings.length }
+        social: captureData.social
+          ? {
+            platform: captureData.social.platform.id,
+            label: captureData.social.platform.label,
+            ...captureData.social.dataset.statistics,
+            warnings: captureData.social.dataset.warnings.length
+          }
           : null
       };
     } catch (error) {
@@ -216,7 +223,7 @@ export class CaptureManager {
       logger.markFailed(error.message);
       throw error;
     } finally {
-      if (threads) await threads.dispose();
+      if (social) await social.dispose();
     }
   }
 
@@ -232,25 +239,25 @@ export class CaptureManager {
   /**
    * Capture full-page screenshot, falling back to the visible viewport.
    */
-  async captureScreenshot(tab, logger, threads) {
+  async captureScreenshot(tab, logger, social) {
     logger.logChain(Action.SCREENSHOT_STARTED, Actor.AUTOMATED);
 
     try {
       return await captureFullPageScreenshot(tab, logger, {
-        cdp: threads ? threads.cdp : null,
-        maxCssHeight: threads ? await threads.screenshotHeightLimit() : null,
-        // Threads: leave the page unmodified (crop the sticky header band instead of
+        cdp: social ? social.cdp : null,
+        maxCssHeight: social ? await social.screenshotHeightLimit() : null,
+        // Social posts: leave the page unmodified (crop the sticky header band instead of
         // restyling it), scroll with trusted wheel input and human-paced settling.
-        overlays: threads ? 'crop' : 'hide',
-        restoreScroll: !threads,
+        overlays: social ? 'crop' : 'hide',
+        restoreScroll: !social,
         // Signed out there is no account at stake: hide login prompts and allow exact
         // programmatic positioning when wheel scrolling cannot move the page.
-        hideModals: Boolean(threads) && !threads.signedIn,
-        exactFallback: !(threads && threads.signedIn),
-        scrollTo: threads && threads.human ? (target, position) => threads.screenshotScrollTo(target, position) : null,
-        settle: threads ? () => threads.screenshotSettle() : undefined,
-        beforeFrame: threads ? () => threads.dismissDialogs() : null,
-        onFrame: threads ? () => threads.harvestVisible() : null,
+        hideModals: Boolean(social) && !social.signedIn,
+        exactFallback: !(social && social.signedIn),
+        scrollTo: social && social.human ? (target, position) => social.screenshotScrollTo(target, position) : null,
+        settle: social ? () => social.screenshotSettle() : undefined,
+        beforeFrame: social ? () => social.dismissDialogs() : null,
+        onFrame: social ? () => social.harvestVisible() : null,
         isCancelled: () => this.cancelled,
         onProgress: (frames, estimated) => {
           const percent = 45 + Math.min(25, Math.round((frames / estimated) * 25));
@@ -425,15 +432,22 @@ export class CaptureManager {
       const suffix = segments.length === 1 ? '' : `-part${String(index + 1).padStart(2, '0')}`;
       files.push({ path: `${ts}-screenshot${suffix}.png`, type: 'screenshot', mimeType: 'image/png', bytes: segment.bytes });
     });
+    const context = captureData.screenshotContext;
+    if (context) {
+      files.push({ path: `${ts}-screenshot-context.png`, type: 'screenshot-context', mimeType: 'image/png', bytes: context.bytes });
+    }
 
     files.push(jsonFile(`${ts}-dom.json`, 'dom', captureData.dom));
     files.push(jsonFile(`${ts}-storage.json`, 'storage', captureData.storage));
     files.push(jsonFile(`${ts}-cookies.json`, 'cookies', captureData.cookies));
 
-    const threads = captureData.threads;
-    if (threads) {
-      const { dataset, summary } = threads;
-      files.push(jsonFile(`${ts}-thread.json`, 'threads-data', {
+    const social = captureData.social;
+    if (social) {
+      const { dataset, summary } = social;
+      const p = social.platform.id;
+      const platform = platformById(p);
+      files.push(jsonFile(`${ts}-thread.json`, 'thread-data', {
+        platform: p,
         captureId: captureData.captureId,
         capturedAt: captureData.timestamp,
         target: summary.target,
@@ -444,14 +458,16 @@ export class CaptureManager {
         posts: dataset.posts,
         relatedPosts: dataset.relatedPosts
       }));
-      files.push(jsonFile(`raw/${ts}-threads-api-responses.json`, 'threads-api-responses', {
+      files.push(jsonFile(`raw/${ts}-${p}-api-responses.json`, 'api-responses', {
         devtoolsProtocol: summary.devtoolsProtocol,
-        note: 'Request tokens (fb_dtsg, lsd, jazoest) are intentionally not recorded',
-        responses: threads.rawNetwork
+        note: platform.api.recordingNote,
+        responses: social.rawNetwork
       }));
-      files.push(jsonFile(`raw/${ts}-threads-embedded-data.json`, 'threads-embedded-data', threads.rawEmbedded));
-      files.push(jsonFile(`raw/${ts}-threads-dom-posts.json`, 'threads-dom-posts', threads.domPosts));
-      files.push(...threads.mediaFiles);
+      if (social.rawEmbedded.length > 0) {
+        files.push(jsonFile(`raw/${ts}-${p}-embedded-data.json`, 'embedded-data', social.rawEmbedded));
+      }
+      files.push(jsonFile(`raw/${ts}-${p}-dom-posts.json`, 'dom-posts', social.domPosts));
+      files.push(...social.mediaFiles);
     }
 
     return files;
@@ -459,26 +475,28 @@ export class CaptureManager {
 
   async buildThreadReport(captureData, files) {
     const settings = (await browser.storage.local.get('settings')).settings || {};
+    const social = captureData.social;
     const html = renderThreadReport({
-      dataset: captureData.threads.dataset,
+      dataset: social.dataset,
+      platform: platformById(social.platform.id),
       capture: {
         captureId: captureData.captureId,
         timestamp: captureData.timestamp,
         url: captureData.url,
-        finalUrl: captureData.threads.summary.finalUrl,
+        finalUrl: social.summary.finalUrl,
         extensionVersion: browser.runtime.getManifest().version,
         investigator: settings.investigatorName || 'Not specified',
         caseNumber: settings.defaultCaseNumber || 'Not specified',
         method: `${captureData.screenshotInfo.backend} screenshots; reply loading ${
-          captureData.threads.summary.replyLoading && captureData.threads.summary.replyLoading.enabled ? 'enabled' : 'disabled'
-        }; DevTools protocol ${captureData.threads.summary.devtoolsProtocol}`
+          social.summary.replyLoading && social.summary.replyLoading.enabled ? 'enabled' : 'disabled'
+        }; DevTools protocol ${social.summary.devtoolsProtocol}`
       },
       files,
-      screenshots: files.filter(f => f.type === 'screenshot').map(f => f.path)
+      screenshots: files.filter(f => f.type === 'screenshot' || f.type === 'screenshot-context').map(f => f.path)
     });
     return {
       path: `${captureData.filenameTimestamp}-thread-report.html`,
-      type: 'threads-report',
+      type: 'thread-report',
       mimeType: 'text/html',
       bytes: textEncoder.encode(html)
     };

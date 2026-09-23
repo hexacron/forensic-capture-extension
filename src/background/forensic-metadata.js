@@ -14,6 +14,7 @@
 import '../../lib/browser-polyfill.min.js';
 
 import { getCurrentTimestamp } from '../utils/timestamp-utils.js';
+import { platformById } from '../social/platforms.js';
 
 /**
  * Get browser information
@@ -180,8 +181,10 @@ export async function generateForensicManifest(captureData, logger) {
     // Screenshot details
     screenshot: captureData.screenshotInfo || null,
 
-    // Threads-specific capture details
-    threadsCapture: captureData.threads ? captureData.threads.summary : null,
+    // Social post capture details (Threads, Instagram, X)
+    socialCapture: captureData.social
+      ? { platform: captureData.social.platform.id, ...captureData.social.summary }
+      : null,
 
     // Technical details
     technicalDetails: {
@@ -208,15 +211,18 @@ function getCaptureMethod(type, captureData) {
   const screenshotBackend = captureData.screenshotInfo ? captureData.screenshotInfo.backend : 'n/a';
   const methods = {
     'screenshot': `Scroll-and-stitch full-page capture via ${screenshotBackend}, PNG`,
+    'screenshot-context': 'Single viewport frame taken before scrolling, showing the page around the scrolled list; the stitched screenshot covers only the scroll container',
     'dom': 'Content script access to document.documentElement.outerHTML at end of capture',
     'storage': 'Isolated-world content script reading localStorage, sessionStorage and IndexedDB of the page origin (nothing injected into the page)',
     'cookies': 'browser.cookies.getAll() with full cookie attributes',
-    'threads-data': 'Normalized Threads posts merged from embedded Relay data, GraphQL responses and rendered DOM',
-    'threads-report': 'Human-readable HTML rendering of the Threads data file',
-    'threads-api-responses': 'Raw /api/graphql response bodies recorded via Chrome DevTools Protocol Network domain',
-    'threads-embedded-data': 'Raw script[type="application/json"][data-sjs] payloads from the post page',
-    'threads-dom-posts': 'Per-post outerHTML and rendered text harvested while scrolling the virtualized list',
-    'media': 'Fetched from the Threads CDN URL in the API data at capture time (credentials omitted)'
+    'thread-data': 'Normalized posts merged from embedded page data, recorded API responses and rendered DOM',
+    'thread-report': 'Human-readable HTML rendering of the thread data file',
+    'api-responses': 'Raw API response bodies recorded via Chrome DevTools Protocol Network domain',
+    'embedded-data': 'Raw server-embedded JSON payloads from the post page',
+    'dom-posts': 'Per-post outerHTML and rendered text harvested while scrolling the virtualized list',
+    'media': captureData.social
+      ? platformById(captureData.social.platform.id).mediaSourceDescription
+      : 'Fetched from the platform CDN URL in the API data at capture time (credentials omitted)'
   };
 
   return methods[type] || 'Unknown capture method';
@@ -243,11 +249,11 @@ function buildCaptureConstraints(captureData) {
     }
   }
 
-  if (captureData.threads) {
-    constraints.push('Threads renders a virtualized list: the DOM file reflects only posts rendered at the end of capture; per-post HTML is in the Threads DOM posts file');
-    constraints.push('Threads content visible depends on the logged-in account (blocks, restrictions, hidden replies)');
-    for (const warning of captureData.threads.summary.warnings) {
-      constraints.push(`Threads: ${warning}`);
+  if (captureData.social) {
+    const { label, id } = captureData.social.platform;
+    constraints.push(...platformById(id).constraints);
+    for (const warning of captureData.social.summary.warnings) {
+      constraints.push(`${label}: ${warning}`);
     }
   }
 

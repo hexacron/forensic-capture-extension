@@ -4,13 +4,14 @@
  * Handles user interactions and communication with background service worker
  */
 
-import { parseThreadsPostUrl, isThreadsUrl } from '../threads/threads-parser.js';
+import { detectPost, platformForUrl, platformById } from '../social/platforms.js';
 
-const THREADS_OPTION_INPUTS = {
+const SOCIAL_OPTION_INPUTS = {
   loadAllReplies: 'optLoadAllReplies',
   reloadBeforeCapture: 'optReloadBeforeCapture',
   downloadMedia: 'optDownloadMedia',
-  carefulPacing: 'optCarefulPacing'
+  carefulPacing: 'optCarefulPacing',
+  revealHiddenReplies: 'optRevealHiddenReplies'
 };
 
 // DOM elements
@@ -29,13 +30,13 @@ let errorText;
 let errorDetails;
 let historySection;
 let historyList;
-let threadsSection;
-let threadsTarget;
+let socialSection;
+let socialTarget;
 
 // Capture state
 let isCapturing = false;
 let messageListener = null;
-let threadsPost = null;
+let socialPost = null; // { platform, target } from detectPost
 
 /**
  * Initialize popup
@@ -56,8 +57,8 @@ function init() {
   errorText = document.getElementById('errorText');
   errorDetails = document.getElementById('errorDetails');
   historyList = document.getElementById('historyList');
-  threadsSection = document.getElementById('threadsSection');
-  threadsTarget = document.getElementById('threadsTarget');
+  socialSection = document.getElementById('socialSection');
+  socialTarget = document.getElementById('socialTarget');
 
   // Set up event listeners
   captureButton.addEventListener('click', handleCaptureClick);
@@ -68,47 +69,57 @@ function init() {
   // Check if there's an ongoing capture
   checkCaptureStatus();
 
-  // Detect a Threads post in the active tab and restore its options
-  detectThreadsPost();
+  // Detect a social post (Threads, Instagram, X) in the active tab and restore its options
+  detectSocialPost();
+}
+
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 /**
- * Show the Threads panel when the active tab is a Threads post permalink.
+ * Show the social post panel when the active tab is a post page of a supported platform.
  */
-async function detectThreadsPost() {
+async function detectSocialPost() {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.url) return;
 
-    threadsPost = parseThreadsPostUrl(tab.url);
-    if (!threadsPost) {
-      if (isThreadsUrl(tab.url)) {
-        updateStatusDetails('Threads detected, but this is not a post page. Open a single post (threads.com/@user/post/CODE) to capture it with its replies.');
+    socialPost = detectPost(tab.url);
+    if (!socialPost) {
+      const platform = platformForUrl(tab.url);
+      if (platform) {
+        updateStatusDetails(`${platform.label} detected, but this is not a post page. Open a single post to capture it with its ${platform.words.replies}.`);
         showSection(statusSection);
       }
       return;
     }
 
-    threadsTarget.textContent = `@${threadsPost.username} · ${threadsPost.code}`;
-    showSection(threadsSection);
-    captureButton.querySelector('.btn-text').textContent = 'Capture Post + Replies';
+    const { platform, target } = socialPost;
+    document.getElementById('socialBadge').textContent = `${platform.label} post detected`;
+    socialTarget.textContent = target.displayLabel;
+    document.getElementById('optLoadAllRepliesTitle').textContent = `Load all ${platform.words.replies}`;
+    document.getElementById('rowRevealHidden').classList.toggle('hidden', platform.id !== 'x');
+    showSection(socialSection);
+    captureButton.querySelector('.btn-text').textContent = `Capture Post + ${capitalize(platform.words.replies)}`;
 
-    const stored = (await browser.storage.local.get('threadsOptions')).threadsOptions || {};
-    for (const [key, id] of Object.entries(THREADS_OPTION_INPUTS)) {
-      if (key in stored) document.getElementById(id).checked = Boolean(stored[key]);
+    const key = `${platform.id}Options`;
+    const stored = (await browser.storage.local.get(key))[key] || {};
+    for (const [option, id] of Object.entries(SOCIAL_OPTION_INPUTS)) {
+      if (option in stored) document.getElementById(id).checked = Boolean(stored[option]);
     }
   } catch (error) {
-    console.error('Failed to detect Threads post:', error);
+    console.error('Failed to detect social post:', error);
   }
 }
 
 /**
- * Read the Threads options from the panel, or null when not a Threads post.
+ * Read the social capture options from the panel, or null when no post is detected.
  */
-function readThreadsOptions() {
-  if (!threadsPost) return null;
+function readSocialOptions() {
+  if (!socialPost) return null;
   const options = {};
-  for (const [key, id] of Object.entries(THREADS_OPTION_INPUTS)) {
+  for (const [key, id] of Object.entries(SOCIAL_OPTION_INPUTS)) {
     options[key] = document.getElementById(id).checked;
   }
   return options;
@@ -142,16 +153,16 @@ async function handleCaptureClick() {
       throw new Error('No active tab found');
     }
 
-    // Persist Threads options and send the capture request
-    const threadsOptions = readThreadsOptions();
-    if (threadsOptions) await browser.storage.local.set({ threadsOptions });
+    // Persist the platform's options and send the capture request
+    const socialOptions = readSocialOptions();
+    if (socialOptions) await browser.storage.local.set({ [`${socialPost.platform.id}Options`]: socialOptions });
 
     const response = await browser.runtime.sendMessage({
       type: 'CAPTURE_REQUEST',
       tabId: tab.id,
       url: tab.url,
       title: tab.title,
-      options: threadsOptions ? { threads: threadsOptions } : {}
+      options: socialOptions ? { social: socialOptions } : {}
     });
 
     if (response && response.success) {
@@ -200,7 +211,7 @@ function handleBackgroundMessage(message, sender, sendResponse) {
 function updateProgress(step, progress, details) {
   const steps = {
     'init': 'Initializing capture...',
-    'threads': 'Preparing Threads post...',
+    'social': 'Preparing post...',
     'screenshot': 'Capturing full-page screenshot...',
     'dom': 'Capturing DOM structure...',
     'storage': 'Capturing browser storage...',
@@ -272,11 +283,13 @@ function handleCaptureComplete(result) {
     ['Hash algorithm', 'SHA-256']
   ];
 
-  if (result.threads) {
-    const t = result.threads;
+  if (result.social) {
+    const t = result.social;
+    const platform = platformById(t.platform);
+    const replies = platform ? platform.words.replies : 'replies';
     rows.push(
-      ['Thread posts', `${t.threadPosts} (${t.replies} replies, ${t.ancestors} ancestors)`],
-      ['Root reports', `${t.rootReportedDirectReplies ?? '—'} direct replies`],
+      ['Thread posts', `${t.threadPosts} (${t.replies} ${replies}, ${t.ancestors} ancestors)`],
+      ['Root reports', `${t.rootReportedReplies ?? '—'} ${t.rootReportedRepliesScope === 'direct' ? 'direct ' : ''}${replies}`],
       ['Completeness notes', String(t.warnings)]
     );
   }

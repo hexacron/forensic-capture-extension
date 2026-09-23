@@ -1,7 +1,7 @@
 /**
  * Evidence-file pipeline: the real helpers from capture-manager.js build the bytes, the real
  * crypto util hashes them, and hashes.txt is then checked with the same tool an investigator
- * uses (shasum -a 256 -c). Also renders the real Threads report and checks its escaping.
+ * uses (shasum -a 256 -c). Also renders the real thread report (Threads adapter) and checks its escaping.
  *
  * Run: bun tests/evidence-pipeline.test.mjs
  */
@@ -18,8 +18,9 @@ const hashLineSrc = cmSrc.match(/bytes: textEncoder\.encode\((files\.map[\s\S]*?
 console.log('hashes.txt content expression:', hashLineSrc.trim());
 
 const { generateSHA256 } = await import(ROOT + 'src/utils/crypto-utils.js');
-const { renderThreadReport } = await import(ROOT + 'src/threads/threads-report.js');
-const parser = await import(ROOT + 'src/threads/threads-parser.js');
+const { renderThreadReport } = await import(ROOT + 'src/social/report.js');
+const parser = await import(ROOT + 'src/social/engine.js');
+const { default: threads } = await import(ROOT + 'src/social/platforms/threads.js');
 const { createZip } = await import(ROOT + 'src/utils/zip-writer.js');
 
 const textEncoder = new TextEncoder();
@@ -29,11 +30,11 @@ const helpers = new Function('textEncoder', 'generateSHA256', `${jsonFileSrc}\n$
 // Build a realistic evidence set from the Threads payload fixture
 // ---------------------------------------------------------------------------
 const fixture = JSON.parse(await Bun.file(new URL('./fixtures/threads-post.json', import.meta.url)).text());
-const api = parser.createApiStore();
-for (const payload of fixture.embedded) parser.collectApiPosts(payload, 'embedded', api);
-for (const doc of parser.parseJsonDocuments(fixture.graphqlResponse)) parser.collectApiPosts(doc, 'network', api);
+const api = parser.createApiStore({ rootCode: 'ROOT1' });
+for (const payload of fixture.embedded) parser.collectApiPosts(payload, 'embedded', api, threads.parser);
+for (const doc of parser.parseJsonDocuments(fixture.graphqlResponse)) parser.collectApiPosts(doc, 'network', api, threads.parser);
 const domPosts = new Map(fixture.domPosts.map(p => [p.code, { ...p, firstObservedAt: '2026-09-22T03:00:00.000Z' }]));
-const dataset = parser.buildThreadDataset({ rootCode: 'ROOT1', api, domPosts });
+const dataset = parser.buildThreadDataset({ rootCode: 'ROOT1', api, domPosts, platform: threads });
 console.log('dataset:', JSON.stringify(dataset.statistics));
 
 const ts = '20260922T030000Z';
@@ -41,11 +42,11 @@ const files = [
   { path: `${ts}-screenshot.png`, type: 'screenshot', mimeType: 'image/png', bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]) },
   helpers.jsonFile(`${ts}-dom.json`, 'dom', { html: '<html>…</html>', title: 'Thread' }),
   helpers.jsonFile(`${ts}-cookies.json`, 'cookies', [{ name: 'sessionid', value: 'x' }]),
-  helpers.jsonFile(`${ts}-thread.json`, 'threads-data', { statistics: dataset.statistics, posts: dataset.posts }),
-  helpers.jsonFile(`raw/${ts}-threads-api-responses.json`, 'threads-api-responses', { responses: [] }),
+  helpers.jsonFile(`${ts}-thread.json`, 'thread-data', { statistics: dataset.statistics, posts: dataset.posts }),
+  helpers.jsonFile(`raw/${ts}-threads-api-responses.json`, 'api-responses', { responses: [] }),
   // incompressible binary (stored) and a large repetitive JSON (deflated)
   { path: `media/ROOT1-01.mp4`, type: 'media', mimeType: 'video/mp4', bytes: crypto.getRandomValues(new Uint8Array(60000)) },
-  helpers.jsonFile(`raw/${ts}-threads-dom-posts.json`, 'threads-dom-posts', Array.from({ length: 400 }, (_, i) => ({ code: `P${i}`, html: '<div data-pressable-container>'.repeat(20) })))
+  helpers.jsonFile(`raw/${ts}-threads-dom-posts.json`, 'dom-posts', Array.from({ length: 400 }, (_, i) => ({ code: `P${i}`, html: '<div data-pressable-container>'.repeat(20) })))
 ];
 await helpers.hashFiles(files);
 const evidenceFiles = [...files]; // what the report was handed, before it exists itself
@@ -53,6 +54,7 @@ const evidenceFiles = [...files]; // what the report was handed, before it exist
 // report, hashed after the files it lists (same order as capture-manager)
 const html = renderThreadReport({
   dataset,
+  platform: threads,
   capture: {
     captureId: 'test-capture-id', timestamp: '2026-09-22T03:00:00.000Z',
     url: 'https://www.threads.com/@rootauthor/post/ROOT1',
@@ -63,7 +65,7 @@ const html = renderThreadReport({
   files: evidenceFiles,
   screenshots: [`${ts}-screenshot.png`]
 });
-const report = { path: `${ts}-thread-report.html`, type: 'threads-report', mimeType: 'text/html', bytes: textEncoder.encode(html) };
+const report = { path: `${ts}-thread-report.html`, type: 'thread-report', mimeType: 'text/html', bytes: textEncoder.encode(html) };
 await helpers.hashFiles([report]);
 files.push(report);
 
@@ -140,13 +142,14 @@ console.log('\n== xss escaping ==');
 const evil = parser.buildThreadDataset({
   rootCode: 'EVIL',
   api: (() => {
-    const store = parser.createApiStore();
-    parser.collectApiPosts({ media: { code: 'EVIL', pk: '1', id: '1_2', taken_at: 1790000000, user: { username: '<img src=x onerror=alert(1)>', pk: '2' }, caption: { text: '</div><script>alert(1)</script>' }, text_post_app_info: { is_reply: false } } }, 'embedded', store);
+    const store = parser.createApiStore({ rootCode: 'EVIL' });
+    parser.collectApiPosts({ media: { code: 'EVIL', pk: '1', id: '1_2', taken_at: 1790000000, user: { username: '<img src=x onerror=alert(1)>', pk: '2' }, caption: { text: '</div><script>alert(1)</script>' }, text_post_app_info: { is_reply: false } } }, 'embedded', store, threads.parser);
     return store;
   })(),
-  domPosts: new Map()
+  domPosts: new Map(),
+  platform: threads
 });
-const evilHtml = renderThreadReport({ dataset: evil, capture: { captureId: '<b>x</b>', timestamp: 't', url: 'u', finalUrl: 'u', extensionVersion: '1', investigator: '"><script>alert(2)</script>', caseNumber: 'c', method: 'm' }, files: [], screenshots: [] });
+const evilHtml = renderThreadReport({ dataset: evil, platform: threads, capture: { captureId: '<b>x</b>', timestamp: 't', url: 'u', finalUrl: 'u', extensionVersion: '1', investigator: '"><script>alert(2)</script>', caseNumber: 'c', method: 'm' }, files: [], screenshots: [] });
 check('script tag in post text is escaped', !/<script>alert\(1\)/.test(evilHtml) && evilHtml.includes('&lt;script&gt;alert(1)'));
 check('img onerror in username is escaped', !/<img src=x onerror/.test(evilHtml));
 check('script in investigator field is escaped', !/<script>alert\(2\)/.test(evilHtml));

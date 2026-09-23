@@ -1,5 +1,5 @@
 /**
- * Human-like, trusted input for pages that watch for automation (Threads/Meta).
+ * Human-like, trusted input for pages that watch for automation (Threads, Instagram, X).
  *
  * Everything is dispatched through the DevTools protocol Input domain, so the page
  * receives genuine browser events (isTrusted === true): wheel scrolling instead of
@@ -21,7 +21,7 @@ export const PACING_PROFILES = {
     wheelTickGap: [18, 48],       // ms between wheel events
     frameSettle: [800, 1700],     // screenshot: wait after each scroll
     clickPause: [700, 1600],
-    maxGraphqlPerMinute: 10,      // cap on reply-page fetches
+    maxContentFetchesPerMinute: 10, // cap on reply-page fetches
     maxLoadMinutes: 30
   },
   fast: {
@@ -34,7 +34,7 @@ export const PACING_PROFILES = {
     wheelTickGap: [8, 16],
     frameSettle: [450, 650],
     clickPause: [250, 500],
-    maxGraphqlPerMinute: 60,
+    maxContentFetchesPerMinute: 60,
     maxLoadMinutes: 10
   }
 };

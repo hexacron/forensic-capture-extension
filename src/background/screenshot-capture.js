@@ -47,7 +47,9 @@ const TAB_ACTIVE_WAIT_MS = 30000;
  * @param {Function} [options.onFrame] - Awaited after each frame (e.g. harvesting virtualized content)
  * @param {Function} [options.onProgress] - Called with (framesCaptured, estimatedFrames)
  * @param {Function} [options.isCancelled] - Returns true to abort
- * @returns {Promise<Object>} { segments: [{bytes, width, height}], backend, frames, ... }
+ * @returns {Promise<Object>} { segments: [{bytes, width, height}], backend, frames, contextImage, ... }
+ *   contextImage: the first full viewport frame when the scroller is an inner element covering
+ *   less than 90% of the viewport (the stitched image then shows only that element), else null
  */
 export async function captureFullPageScreenshot(tab, logger, options = {}) {
   const {
@@ -97,6 +99,7 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
   let topInset = 0; // 'crop': sticky header band excluded from frames after the first
   let modalOverlaysHidden = 0;
   let scrollCorrections = 0;
+  let contextImage = null;
 
   /**
    * Scroll so the next frame's visible band starts at `want`. Undershoot is harmless
@@ -150,6 +153,15 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
       }
       pos = await callPageTool(tabId, 'position');
       const image = await capturer.capture();
+      // An inner scroller that fills (nearly) the whole viewport already shows everything the
+      // first frame shows; only a partial one (e.g. a comments column) needs the context.
+      const partialScroller = !plan.scrollerIsDocument &&
+        pos.region.width * pos.region.height < 0.9 * plan.viewport.width * plan.viewport.height;
+      if (frames === 0 && partialScroller) {
+        const bitmap = await createImageBitmap(image);
+        contextImage = { bytes: new Uint8Array(await image.arrayBuffer()), width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+      }
       await stitcher.addFrame(image, pos.scrollTop, pos.region, ceiling, frames === 0 ? 0 : topInset);
       frames++;
 
@@ -202,7 +214,8 @@ export async function captureFullPageScreenshot(tab, logger, options = {}) {
     overlayHandling: overlays === 'crop' ? `sticky header band of ${topInset}px cropped from frames after the first (page not modified)` : 'fixed/sticky elements hidden after the first frame',
     fixedElementsHidden: fixedHidden ? fixedHidden.hidden : 0,
     modalOverlaysHidden,
-    scrollCorrections
+    scrollCorrections,
+    contextImage
   };
 
   logger.logInfo('Full-page screenshot complete', {

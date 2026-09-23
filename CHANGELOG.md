@@ -4,6 +4,63 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### ✨ Instagram and X post capture
+
+The Threads capture is now a generic social post capture with one adapter per platform
+(`src/social/platforms/threads.js`, `instagram.js`, `x.js`). Threads behaviour is unchanged.
+
+- **Instagram posts and Reels** (`instagram.com/p/CODE/`, `/reel/CODE/`, with or without the
+  username prefix): post media, caption, counts, tagged users and location from the
+  server-embedded payload; comments and replies to comments from the embedded first page and
+  recorded `/api/graphql` / `/api/v1/` responses, linked by `parent_comment_id`. "Load more
+  comments" (an icon button with no text) and "View replies" are pressed with trusted input.
+  The comment count Instagram reports includes replies to comments, and the completeness
+  note compares against that.
+- **X posts** (`x.com/user/status/ID`, `twitter.com`, `mobile.x.com`, `/i/web/status/ID`):
+  tweets from recorded `TweetDetail` responses (text incl. long posts, counts incl. views and
+  bookmarks, media with the highest-bitrate MP4, quoted and reposted posts, reply linkage);
+  tweets from other conversations are listed as related. Request headers and cookies are
+  never recorded, only the operation name and variables. Posts seen only in the DOM (signed
+  out: no `<time>` elements) are dated from their snowflake id.
+- **Show hidden replies** (X, popup option, on by default): also presses "Show probable spam"
+  and "Show additional replies"; when off, a completeness note says hidden replies were not
+  opened. `replyLoading.hiddenReplyButtonsPressed` / `…NotPressed` are in the manifest.
+- **Screenshot context frame**: when the page scrolls an inner element that covers less than
+  90% of the viewport (Instagram's comment column), the first viewport frame is kept as
+  `-screenshot-context.png` next to the stitched column.
+- Reply loading that ends at the pacing time limit (30 min careful, 10 min fast) is now a
+  completeness note.
+
+### 🐛 Fixed
+
+- **Screenshot mixed two scroll containers**: `scroller()` re-detects the container whenever
+  the current one is the document, so a container that scrolled into view mid-screenshot
+  (Instagram's comment column) replaced the document between frames and the stitched image
+  was garbage. The container is now fixed from `beginScreenshot` to `endScreenshot`; one that
+  is shorter than the viewport but cut off by it is not used (the document is stitched).
+- **Fresh load answered with an error page failed the whole capture** ("Frame with ID 0 is
+  showing error page"); it now falls back to the user's tab like a refused load, with a
+  completeness note.
+
+### Changed
+
+- Manifest key `threadsCapture` → `socialCapture` (with `platform`); inside it
+  `graphqlResponsesCaptured` → `apiResponsesCaptured`,
+  `backgroundGraphqlRequestsNotRateLimited` → `backgroundApiRequestsNotRateLimited`.
+- `thread.json` statistics: `rootReportedDirectReplies` → `rootReportedReplies` plus
+  `rootReportedRepliesScope` (`direct` for Threads and X, `all` for Instagram). Posts carry
+  `platform` and `createdAtSource`.
+- Raw evidence files are named per platform: `raw/<ts>-<platform>-api-responses.json` etc.
+  (Threads paths unchanged). The embedded-data file is only written when there is embedded
+  data. File types in the manifest: `thread-data`, `thread-report`, `api-responses`,
+  `embedded-data`, `dom-posts`.
+- Chain-of-custody actions `threads-replies-loaded` / `threads-data-extracted` →
+  `replies-loaded` / `thread-data-extracted`.
+
+---
+
 ## [1.2.1] - 2026-09-23
 
 ### 🏷️ Renamed to Exhibit, new icon

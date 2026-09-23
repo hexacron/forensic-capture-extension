@@ -1,11 +1,11 @@
 {
   "name": "exhibit",
   "version": "1.2.1",
-  "description": "Exhibit: web evidence capture with SHA-256 integrity and chain of custody (full-page screenshots, page data, Threads posts and replies)",
+  "description": "Exhibit: web evidence capture with SHA-256 integrity and chain of custody (full-page screenshots, page data, Threads, Instagram and X posts with replies)",
   "main": "src/background/background.js",
   "scripts": {
     "lint": "bunx --bun eslint@9 src",
-    "test": "bun run lint && bun tests/stitcher-geometry.test.mjs && bun tests/threads-parser.test.mjs && bun tests/evidence-pipeline.test.mjs"
+    "test": "bun run lint && bun tests/stitcher-geometry.test.mjs && bun tests/social-threads.test.mjs && bun tests/social-instagram.test.mjs && bun tests/social-x.test.mjs && bun tests/evidence-pipeline.test.mjs"
   },
   "keywords": [
     "forensic",
@@ -14,7 +14,9 @@
     "capture",
     "evidence",
     "webextension",
-    "threads"
+    "threads",
+    "instagram",
+    "x"
   ],
   "author": "",
   "license": "MIT",

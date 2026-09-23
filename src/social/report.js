@@ -1,7 +1,7 @@
 /**
- * Human-readable, self-contained HTML report for a captured Threads post.
- * Pure function; no scripts and no remote resources (viewing the report never
- * contacts Meta servers). Local media is referenced by relative path.
+ * Human-readable, self-contained HTML report for a captured social post and its
+ * replies. Pure function; no scripts and no remote resources (viewing the report
+ * never contacts the platform). Local media is referenced by relative path.
  */
 
 function escapeHtml(value) {
@@ -15,6 +15,10 @@ function escapeHtml(value) {
 
 function formatCount(value) {
   return value === null || value === undefined ? '—' : String(value);
+}
+
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 function renderMedia(post) {
@@ -33,16 +37,19 @@ function renderMedia(post) {
   return items.length ? `<div class="media">${items.join('')}</div>` : '';
 }
 
-function renderPost(post, rootCode) {
+function renderPost(post, rootCode, platform) {
   const author = post.author || {};
   const indent = post.role === 'reply' && post.parentCode && post.parentCode !== rootCode ? ' nested' : '';
   const replyTo = post.replyToUsername ? `<div class="reply-to">Replying to @${escapeHtml(post.replyToUsername)}</div>` : '';
   const text = post.text !== null && post.text !== undefined
     ? `<div class="text">${escapeHtml(post.text)}</div>`
     : `<div class="text rendered"><span class="label">Rendered text (no API data):</span>\n${escapeHtml(post.rendered ? post.rendered.text : '')}</div>`;
-  const counts = post.counts
-    ? `<div class="counts">Likes ${formatCount(post.counts.likes)} · Replies ${formatCount(post.counts.replies)} · Reposts ${formatCount(post.counts.reposts)} · Quotes ${formatCount(post.counts.quotes)}</div>`
-    : '';
+  const countParts = post.counts
+    ? platform.report.countLabels(post)
+      .filter(([key]) => post.counts[key] !== null && post.counts[key] !== undefined)
+      .map(([key, label]) => `${escapeHtml(label)} ${formatCount(post.counts[key])}`)
+    : [];
+  const counts = countParts.length ? `<div class="counts">${countParts.join(' · ')}</div>` : '';
   const quoted = post.quotedPost
     ? `<div class="quoted">Quoted <a href="${escapeHtml(post.quotedPost.url)}">@${escapeHtml(post.quotedPost.author)}</a>: ${escapeHtml(post.quotedPost.text || '')}</div>`
     : '';
@@ -80,23 +87,26 @@ function renderPost(post, rootCode) {
 /**
  * @param {Object} input
  * @param {Object} input.dataset - buildThreadDataset() result (with localMedia filled)
+ * @param {Object} input.platform - Platform adapter the dataset was built with
  * @param {Object} input.capture - { captureId, timestamp, url, finalUrl, extensionVersion, investigator, caseNumber, method }
  * @param {Array} input.files - Evidence files already hashed: [{ path, sha256, size }]
  * @param {Array<string>} input.screenshots - Screenshot file paths
  */
-export function renderThreadReport({ dataset, capture, files, screenshots }) {
+export function renderThreadReport({ dataset, platform, capture, files, screenshots }) {
+  const { label, words } = platform;
   const stats = dataset.statistics;
   const root = dataset.root;
   const title = root
-    ? `Threads post by @${root.author.username} (${root.code})`
-    : `Threads post ${dataset.rootCode}`;
+    ? `${label} post by @${root.author.username} (${root.code})`
+    : `${label} post ${dataset.rootCode}`;
+  const scopeWord = stats.rootReportedRepliesScope === 'direct' ? 'direct ' : '';
 
   const warnings = dataset.warnings.length
     ? `<section class="warnings"><h2>Completeness notes</h2><ul>${dataset.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></section>`
     : '';
 
   const uncaptured = dataset.repliesWithUncapturedChildren.length
-    ? `<section><h2>Replies with nested replies not shown</h2><table><tr><th>Post</th><th>Reported</th><th>Captured</th></tr>${
+    ? `<section><h2>${capitalize(words.replies)} with nested ${words.replies} not shown</h2><table><tr><th>Post</th><th>Reported</th><th>Captured</th></tr>${
       dataset.repliesWithUncapturedChildren.map(r => `<tr><td><a href="${escapeHtml(r.url)}">${escapeHtml(r.code)}</a></td><td>${r.reportedReplies}</td><td>${r.capturedReplies}</td></tr>`).join('')
     }</table></section>`
     : '';
@@ -156,13 +166,13 @@ export function renderThreadReport({ dataset, capture, files, screenshots }) {
     <tr><th>Case number</th><td>${escapeHtml(capture.caseNumber)}</td></tr>
     <tr><th>Tool</th><td>Exhibit v${escapeHtml(capture.extensionVersion)}</td></tr>
     <tr><th>Method</th><td>${escapeHtml(capture.method)}</td></tr>
-    <tr><th>Posts captured</th><td>${stats.threadPosts} (${stats.ancestors} ancestor, 1 root, ${stats.replies} replies); root reports ${formatCount(stats.rootReportedDirectReplies)} direct replies</td></tr>
+    <tr><th>Posts captured</th><td>${stats.threadPosts} (${stats.ancestors} ancestor, 1 root, ${stats.replies} ${words.replies}); root reports ${formatCount(stats.rootReportedReplies)} ${scopeWord}${words.replies}</td></tr>
   </table>
   ${warnings}
   <h2>Screenshots</h2>
   <ul>${screenshotLinks}</ul>
-  <h2>Thread</h2>
-  ${dataset.posts.map(post => renderPost(post, dataset.rootCode)).join('\n')}
+  <h2>${escapeHtml(words.heading)}</h2>
+  ${dataset.posts.map(post => renderPost(post, dataset.rootCode, platform)).join('\n')}
   ${uncaptured}
   <h2>Evidence file hashes (SHA-256)</h2>
   <p>This report and the manifest are hashed in the hashes file.</p>

@@ -1,0 +1,361 @@
+{
+  "note": "Synthetic reproduction (fake users) of the payload shapes seen on a real instagram.com post page, probed signed out 2026-09-23: the media object at xig_polaris_media.if_not_gated_logged_out with its sibling comments_connection in a data-sjs Relay payload, a second payload with another media object (profile timeline), a paginated GraphQL comment batch with one child comment, and DOM harvest records.",
+  "embedded": [
+    {
+      "require": [
+        [
+          "ScheduledServerJS",
+          "handle",
+          null,
+          [
+            {
+              "__bbox": {
+                "require": [
+                  [
+                    "RelayPrefetchedStreamCache",
+                    "next",
+                    [],
+                    [
+                      null,
+                      {
+                        "__bbox": {
+                          "result": {
+                            "data": {
+                              "xig_polaris_media": {
+                                "if_not_gated_logged_out": {
+                                  "code": "IGROOT1",
+                                  "pk": "100",
+                                  "id": "100_500",
+                                  "taken_at": 1790000000,
+                                  "media_type": 8,
+                                  "product_type": "carousel_container",
+                                  "user": {
+                                    "pk": "500",
+                                    "id": "500",
+                                    "username": "ig_owner",
+                                    "full_name": "Ig Owner",
+                                    "is_verified": true,
+                                    "is_private": false,
+                                    "profile_pic_url": "https://cdn.example/ig_owner.jpg"
+                                  },
+                                  "caption": {
+                                    "pk": "7000",
+                                    "text": "hello @friend_one",
+                                    "created_at": 1790000000
+                                  },
+                                  "caption_is_edited": false,
+                                  "like_count": 50,
+                                  "comment_count": 5,
+                                  "carousel_media": [
+                                    {
+                                      "code": "IGITEM1",
+                                      "pk": "101",
+                                      "id": "101_500",
+                                      "taken_at": 1790000000,
+                                      "media_type": 1,
+                                      "user": {
+                                        "pk": "500",
+                                        "id": "500",
+                                        "username": "ig_owner"
+                                      },
+                                      "image_versions2": {
+                                        "candidates": [
+                                          {
+                                            "url": "https://cdn.example/ig-small.jpg",
+                                            "width": 320,
+                                            "height": 320
+                                          },
+                                          {
+                                            "url": "https://cdn.example/ig-big.jpg",
+                                            "width": 1080,
+                                            "height": 1080
+                                          }
+                                        ]
+                                      },
+                                      "accessibility_caption": "Photo of a harbour"
+                                    },
+                                    {
+                                      "code": "IGITEM2",
+                                      "pk": "102",
+                                      "id": "102_500",
+                                      "taken_at": 1790000000,
+                                      "media_type": 2,
+                                      "user": {
+                                        "pk": "500",
+                                        "id": "500",
+                                        "username": "ig_owner"
+                                      },
+                                      "original_width": 720,
+                                      "original_height": 1280,
+                                      "image_versions2": {
+                                        "candidates": [
+                                          {
+                                            "url": "https://cdn.example/ig-poster.jpg",
+                                            "width": 720,
+                                            "height": 1280
+                                          }
+                                        ]
+                                      },
+                                      "video_versions": [
+                                        {
+                                          "url": "https://cdn.example/ig-clip.mp4",
+                                          "width": 720,
+                                          "height": 1280,
+                                          "type": 101
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "usertags": {
+                                    "in": [
+                                      {
+                                        "user": {
+                                          "username": "tagged_person"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "location": {
+                                    "name": "Harbour",
+                                    "pk": 42
+                                  }
+                                },
+                                "comments_connection": {
+                                  "edges": [
+                                    {
+                                      "node": {
+                                        "pk": "201",
+                                        "id": "201",
+                                        "text": "First comment",
+                                        "created_at": 1790000100,
+                                        "user": {
+                                          "pk": "9201",
+                                          "id": "9201",
+                                          "username": "commenter_one",
+                                          "is_verified": false,
+                                          "profile_pic_url": "https://cdn.example/commenter_one.jpg"
+                                        },
+                                        "child_comment_count": 1,
+                                        "parent_comment_id": null,
+                                        "comment_like_count": 3,
+                                        "restricted_status": null,
+                                        "is_covered": false
+                                      }
+                                    },
+                                    {
+                                      "node": {
+                                        "pk": "202",
+                                        "id": "202",
+                                        "text": "Second comment @ig_owner",
+                                        "created_at": 1790000200,
+                                        "user": {
+                                          "pk": "9202",
+                                          "id": "9202",
+                                          "username": "commenter_two",
+                                          "is_verified": false,
+                                          "profile_pic_url": "https://cdn.example/commenter_two.jpg"
+                                        },
+                                        "child_comment_count": 0,
+                                        "parent_comment_id": null,
+                                        "comment_like_count": 0,
+                                        "restricted_status": null,
+                                        "is_covered": false
+                                      }
+                                    }
+                                  ],
+                                  "page_info": {
+                                    "has_next_page": true,
+                                    "end_cursor": "x"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      ]
+    },
+    {
+      "require": [
+        [
+          "ScheduledServerJS",
+          "handle",
+          null,
+          [
+            {
+              "__bbox": {
+                "require": [
+                  [
+                    "RelayPrefetchedStreamCache",
+                    "next",
+                    [],
+                    [
+                      null,
+                      {
+                        "__bbox": {
+                          "result": {
+                            "data": {
+                              "xdt_api__v1__feed__user_timeline_graphql_connection": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "code": "IGOTHER1",
+                                      "pk": "300",
+                                      "id": "300_500",
+                                      "taken_at": 1789000000,
+                                      "media_type": 1,
+                                      "product_type": "feed",
+                                      "user": {
+                                        "pk": "500",
+                                        "id": "500",
+                                        "username": "ig_owner",
+                                        "full_name": "Ig Owner",
+                                        "is_verified": true,
+                                        "is_private": false,
+                                        "profile_pic_url": "https://cdn.example/ig_owner.jpg"
+                                      },
+                                      "caption": {
+                                        "text": "another post"
+                                      },
+                                      "like_count": 1,
+                                      "comment_count": 0,
+                                      "image_versions2": {
+                                        "candidates": [
+                                          {
+                                            "url": "https://cdn.example/other.jpg",
+                                            "width": 640,
+                                            "height": 640
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  ]
+                ]
+              }
+            }
+          ]
+        ]
+      ]
+    }
+  ],
+  "graphqlResponse": "{\"data\": {\"xdt_api__v1__media__media_id__comments__connection\": {\"edges\": [{\"node\": {\"pk\": \"203\", \"id\": \"203\", \"text\": \"Third top-level comment\", \"created_at\": 1790000300, \"user\": {\"pk\": \"9203\", \"id\": \"9203\", \"username\": \"commenter_three\", \"is_verified\": false, \"profile_pic_url\": \"https://cdn.example/commenter_three.jpg\"}, \"child_comment_count\": 0, \"parent_comment_id\": null, \"comment_like_count\": 0, \"restricted_status\": null, \"is_covered\": false}}, {\"node\": {\"pk\": \"204\", \"id\": \"204\", \"text\": \"@commenter_one replying\", \"created_at\": 1790000400, \"user\": {\"pk\": \"9204\", \"id\": \"9204\", \"username\": \"commenter_four\", \"is_verified\": false, \"profile_pic_url\": \"https://cdn.example/commenter_four.jpg\"}, \"child_comment_count\": 0, \"parent_comment_id\": \"201\", \"comment_like_count\": 0, \"restricted_status\": null, \"is_covered\": false}}]}}}",
+  "domPosts": [
+    {
+      "code": "IGROOT1",
+      "author": "ig_owner",
+      "permalink": "https://www.instagram.com/p/IGROOT1/",
+      "datetime": "2026-09-21T14:13:20.000Z",
+      "datetimeTitle": null,
+      "datetimeLabel": "1d",
+      "renderedText": "ig_owner\nhello @friend_one\n1d",
+      "images": [],
+      "videos": [],
+      "outboundLinks": [],
+      "documentY": 40,
+      "height": 50,
+      "inThreadSection": null,
+      "nestedInCode": null,
+      "html": "<div>IGROOT1</div>"
+    },
+    {
+      "code": "201",
+      "author": "commenter_one",
+      "permalink": "https://www.instagram.com/p/IGROOT1/c/201/",
+      "datetime": "2026-09-21T14:15:00.000Z",
+      "datetimeTitle": null,
+      "datetimeLabel": "1d",
+      "renderedText": "commenter_one First comment",
+      "images": [],
+      "videos": [],
+      "outboundLinks": [],
+      "documentY": 300,
+      "height": 50,
+      "inThreadSection": null,
+      "nestedInCode": null,
+      "html": "<div>201</div>"
+    },
+    {
+      "code": "204",
+      "author": "commenter_four",
+      "permalink": "https://www.instagram.com/p/IGROOT1/c/204/",
+      "datetime": "2026-09-21T14:20:00.000Z",
+      "datetimeTitle": null,
+      "datetimeLabel": "1d",
+      "renderedText": "commenter_four @commenter_one replying",
+      "images": [],
+      "videos": [],
+      "outboundLinks": [],
+      "documentY": 360,
+      "height": 50,
+      "inThreadSection": null,
+      "nestedInCode": null,
+      "html": "<div>204</div>"
+    },
+    {
+      "code": "202",
+      "author": "commenter_two",
+      "permalink": "https://www.instagram.com/p/IGROOT1/c/202/",
+      "datetime": "2026-09-21T14:16:40.000Z",
+      "datetimeTitle": null,
+      "datetimeLabel": "1d",
+      "renderedText": "commenter_two Second comment",
+      "images": [],
+      "videos": [],
+      "outboundLinks": [],
+      "documentY": 420,
+      "height": 50,
+      "inThreadSection": null,
+      "nestedInCode": null,
+      "html": "<div>202</div>"
+    },
+    {
+      "code": "203",
+      "author": "commenter_three",
+      "permalink": "https://www.instagram.com/p/IGROOT1/c/203/",
+      "datetime": "2026-09-21T14:18:20.000Z",
+      "datetimeTitle": null,
+      "datetimeLabel": "1d",
+      "renderedText": "commenter_three Third top-level comment",
+      "images": [],
+      "videos": [],
+      "outboundLinks": [],
+      "documentY": 500,
+      "height": 50,
+      "inThreadSection": null,
+      "nestedInCode": null,
+      "html": "<div>203</div>"
+    },
+    {
+      "code": "299",
+      "author": "dom_only_user",
+      "permalink": "https://www.instagram.com/p/IGROOT1/c/299/",
+      "datetime": "2026-09-21T14:30:00.000Z",
+      "datetimeTitle": null,
+      "datetimeLabel": "1d",
+      "renderedText": "dom_only_user A comment only seen rendered",
+      "images": [],
+      "videos": [],
+      "outboundLinks": [],
+      "documentY": 560,
+      "height": 50,
+      "inThreadSection": null,
+      "nestedInCode": null,
+      "html": "<div>299</div>"
+    }
+  ]
+}

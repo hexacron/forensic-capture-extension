@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Exhibit",
   "version": "1.2.1",
-  "description": "Web evidence capture with SHA-256 integrity and chain of custody: full-page screenshots, page data, Threads posts and replies",
+  "description": "Web evidence capture with SHA-256 integrity and chain of custody: full-page screenshots, page data, Threads, Instagram and X threads",
 
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

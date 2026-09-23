@@ -44,8 +44,8 @@ export const Action = {
   CDP_DETACHED: 'devtools-protocol-detached',
   PAGE_RELOADED: 'page-reloaded',
   PAGE_INTERACTION: 'page-interaction',
-  THREADS_REPLIES_LOADED: 'threads-replies-loaded',
-  THREADS_DATA_EXTRACTED: 'threads-data-extracted',
+  REPLIES_LOADED: 'replies-loaded',
+  THREAD_DATA_EXTRACTED: 'thread-data-extracted',
   MEDIA_DOWNLOADED: 'media-downloaded'
 };
 

@@ -16,14 +16,14 @@
 
     <!-- Main Capture Section -->
     <main class="main">
-      <!-- Threads post options -->
-      <div id="threadsSection" class="threads-section hidden">
-        <div class="threads-header">
-          <span class="threads-badge">Threads post detected</span>
-          <span id="threadsTarget" class="threads-target"></span>
+      <!-- Social post options (Threads, Instagram, X) -->
+      <div id="socialSection" class="social-section hidden">
+        <div class="social-header">
+          <span id="socialBadge" class="social-badge">Post detected</span>
+          <span id="socialTarget" class="social-target"></span>
         </div>
         <label class="option"><input type="checkbox" id="optLoadAllReplies" checked>
-          <span><strong>Load all replies</strong><br>Scrolls and expands the thread until no new replies appear.</span>
+          <span><strong id="optLoadAllRepliesTitle">Load all replies</strong><br>Scrolls and expands the thread until no new replies appear.</span>
         </label>
         <label class="option"><input type="checkbox" id="optReloadBeforeCapture" checked>
           <span><strong>Load the post fresh</strong><br>Opens the post's own link in a new tab so its API responses are recorded as evidence. Your current tab is left as it is.</span>
@@ -34,7 +34,10 @@
         <label class="option"><input type="checkbox" id="optCarefulPacing" checked>
           <span><strong>Careful pacing</strong><br>Scrolls and pauses like a person reading and limits how fast replies are fetched. Slower; use it with accounts you want to keep.</span>
         </label>
-        <p class="threads-note">Chrome shows a "being debugged" bar during capture. Keep this tab active and the window visible on screen until the capture finishes.</p>
+        <label class="option hidden" id="rowRevealHidden"><input type="checkbox" id="optRevealHiddenReplies" checked>
+          <span><strong>Show hidden replies</strong><br>Also opens replies X hides as probable spam or potentially offensive.</span>
+        </label>
+        <p class="social-note">Chrome shows a "being debugged" bar during capture. Keep this tab active and the window visible on screen until the capture finishes.</p>
       </div>
 
       <!-- Capture Button -->

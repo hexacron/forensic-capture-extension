@@ -18,8 +18,9 @@ Captures forensic evidence from web pages including:
 - **SHA-256 hashes** for integrity verification
 - **Chain of custody logging** for forensic compliance
 - **Organized folder downloads** (timestamped folders)
-- **Threads posts with all replies** (threads.com / threads.net): structured thread data,
-  raw API evidence, media files and a readable HTML report
+- **Social posts with all replies/comments** - Threads (threads.com / threads.net),
+  Instagram posts and Reels, X (x.com / twitter.com): structured thread data, raw API
+  evidence, media files and a readable HTML report
 
 ## Architecture
 
@@ -38,7 +39,7 @@ src/
 │   ├── background.js           # Message router, capture state
 │   ├── capture-manager.js      # Orchestration, evidence files, hashing, manifest
 │   ├── screenshot-capture.js   # Scroll-and-stitch, segment stitcher, capture backends
-│   ├── threads-capture.js      # Threads session: CDP network capture, reply loading, media
+│   ├── social-capture.js       # SocialCaptureSession: CDP network capture, reply loading, media
 │   ├── cdp-session.js          # chrome.debugger wrapper (Chromium only)
 │   ├── human-input.js          # Trusted wheel/pointer/key input + careful/fast pacing
 │   ├── page-tools-client.js    # Injects/calls the page toolkit, version-checked
@@ -46,12 +47,18 @@ src/
 │   └── download-manager.js     # File downloads (bytes -> data URL)
 ├── content/             # Injected into pages
 │   ├── content-injector.js     # DOM + storage bridge (PING/CAPTURE_DOM/CAPTURE_STORAGE)
-│   └── page-tools.js           # Scroll container, overlays, Threads harvest/expand
-├── threads/             # Pure logic, no browser APIs (also imported by the popup)
-│   ├── threads-parser.js       # URL parse, API walk, dataset merge, completeness checks
-│   └── threads-report.js       # Static HTML evidence report
+│   └── page-tools.js           # Scroll container, overlays, config-driven post harvest/expand
+├── social/              # Pure logic, no browser APIs (also imported by the popup)
+│   ├── platforms.js            # Registry: PLATFORMS, detectPost(), platformForUrl(), platformById()
+│   ├── platforms/              # One adapter per platform (same contract, see threads.js)
+│   │   ├── threads.js
+│   │   ├── instagram.js        # posts + Reels, comments ("anchors" DOM harvest)
+│   │   └── x.js                # TweetDetail parsing, hidden replies, snowflake dates
+│   ├── engine.js               # API walk (parser hooks), parent resolution, dataset, completeness
+│   ├── meta-media.js           # image_versions2 / video_versions picking (Threads + Instagram)
+│   └── report.js               # Static HTML evidence report
 ├── popup/               # User interface
-│   ├── popup.html              # Includes the Threads options panel
+│   ├── popup.html              # Includes the social post options panel
 │   ├── popup.js
 │   └── popup.css
 └── utils/               # Shared utilities
@@ -301,32 +308,50 @@ Until v1.2.0 storage was read by `src/injected/injected.js`, inserted into the p
 its console lines and the whole storage payload, and `web_accessible_resources` let any site
 probe for the extension. Both are gone: never run capture code in the page's main world.
 
-### Threads Capture Pipeline
+### Social Post Capture Pipeline (Threads, Instagram, X)
+
+A platform adapter (`src/social/platforms/<id>.js`) supplies everything platform-specific:
+URL parsing, session cookie, API URL pattern + request summarizer (never tokens or headers),
+`dom` config for the page toolkit (JSON only: `callPageTool` cannot pass RegExp objects, so
+patterns travel as strings and are compiled by `configurePlatform`), `parser` hooks for the
+engine's structure-agnostic walk, wording (`reply`/`comment`) and report count labels.
+`SocialCaptureSession.ensureTools()` injects and configures the toolkit on every tab it uses.
 
 ```text
 prepare()
-  attach chrome.debugger -> Network.enable, record /api/graphql request+response bodies
-  optional reload (bypassCache) so the post's own queries are recorded
-  wait for rendered posts, dismiss the login dialog (trusted Escape via CDP)
+  attach chrome.debugger -> Network.enable, record API request+response bodies
+  optional fresh load in a new tab so the post's own queries are recorded
+  wait for the target post (postRendered), dismiss the login dialog (trusted Escape via CDP)
   verify the tab is still on the target post (otherwise: login wall)
 loadAllReplies()
-  round = expand "show more replies" buttons -> scroll to the end of thread content
+  round = expand "show more replies" / "Load more comments" / X hidden-reply buttons
+          -> scroll to the end of thread content
   harvest rendered posts; growth measured on thread content height, new posts, clicks
   stop after 3 rounds without growth (spinner buys at most 5 extra rounds),
-  or 400 rounds / 10 minutes
+  or 1500 rounds / pacing time limit (30 min careful, 10 min fast; completeness note)
 screenshot pass
-  maxCssHeight = Y of the "Related threads" marker; harvest again on every frame
+  maxCssHeight = Y of the related-content marker inside the scroller; harvest on every frame;
+  partial inner scroller (<90% of the viewport, Instagram) -> first frame kept as -screenshot-context.png
 finalize()
-  parse embedded script[data-sjs] payloads + recorded GraphQL bodies (deep walk),
+  parse embedded payloads + recorded API bodies (deep walk with platform.parser hooks),
   merge with DOM observations, classify roles, compare captured vs reported reply counts,
   fetch media (4 concurrent, 150MB cap, credentials omitted)
 dispose()
   detach chrome.debugger (always, in a finally block)
 ```
 
-Why three sources: Threads virtualises its reply list (off-screen posts are removed from the
-DOM), the first reply batch only exists in the server-embedded payload, later batches only in
-GraphQL responses, and the rendered text is the only proof of what a viewer actually saw.
+DOM harvest modes: `containers` (Threads `[data-pressable-container]`, X `article`: one
+element per post, permalink from the time link or first matching link) and `anchors`
+(Instagram: no per-comment container; each comment permalink `/p/CODE/c/ID/` anchors a block =
+outermost ancestor holding only that permalink; the post itself is the block around the time
+element that is not inside a comment permalink).
+
+Reported-count scope: Threads/X report direct replies (`direct`), Instagram's `comment_count`
+includes replies to comments (`all`); the completeness warning wording follows the scope.
+
+Why three sources: the platforms virtualise their lists (off-screen posts are removed from the
+DOM), the first batch often only exists in the server-embedded payload, later batches only in
+API responses, and the rendered text is the only proof of what a viewer actually saw.
 
 ## Files Generated Per Capture
 
@@ -343,14 +368,15 @@ forensic-capture-20260922T143045Z/
 └── 20260922T143045Z-hashes.txt            # SHA-256 hashes (sha256sum format)
 ```
 
-Threads captures add:
+Social post captures add (`<p>` = `threads`, `instagram` or `x`):
 
 ```
 ├── 20260922T143045Z-thread.json           # Normalized post + replies
 ├── 20260922T143045Z-thread-report.html    # Readable report
-├── raw/…-threads-api-responses.json       # Raw GraphQL bodies (no auth tokens)
-├── raw/…-threads-embedded-data.json       # Raw embedded payloads
-├── raw/…-threads-dom-posts.json           # Per-post outerHTML + rendered text
+├── 20260922T143045Z-screenshot-context.png # Viewport before scrolling (partial inner scrollers only)
+├── raw/…-<p>-api-responses.json           # Raw API bodies (no auth tokens / headers)
+├── raw/…-<p>-embedded-data.json           # Raw embedded payloads (only when present)
+├── raw/…-<p>-dom-posts.json               # Per-post outerHTML + rendered text
 └── media/CODE-NN.jpg|mp4                  # Downloaded post media
 ```
 
@@ -369,13 +395,18 @@ Threads captures add:
 ### Screenshot Limitations
 - **Very long pages:** one frame per viewport, so a 20,000px page takes ~15-30s (CDP) or
   ~25-40s (`captureVisibleTab`)
-- **Sticky headers/footers:** captured in the first frame only (hidden afterwards)
+- **Sticky headers/footers:** captured in the first frame only (hidden afterwards); social
+  captures only crop the sticky *header* band, so sticky side columns (X's right rail) repeat
+- **Scroller fixed per screenshot:** `beginScreenshot` picks the container once and
+  `scroller()` returns it until `endScreenshot`. A container shorter than the viewport but cut
+  off by it (Instagram's comment column below the fold) is not stitched; the document is
+  stitched instead, because frames cannot show the rows outside the viewport
 - **Lazy-loaded images:** 500ms settle per frame; slower loaders may still miss
 - **Animated content / video:** each frame is a different moment in time
 - **Infinite feeds:** captured height is fixed before the first frame, so content appended
   during capture is not included (recorded as `truncated` in the manifest)
 
-### Threads Limitations
+### Social Post Limitations (Threads, Instagram, X)
 - Hidden, restricted, deleted and account-filtered replies cannot be captured; the
   discrepancy is reported instead of silently ignored
 - Replies to replies live on their own permalink and are listed in
@@ -383,17 +414,26 @@ Threads captures add:
 - Parent linkage comes from API data; DOM-only posts have `parentCode: null`
 - Video posts using MSE/blob URLs are only recorded when the API exposes a direct
   `video_versions` URL
+- **Instagram signed out:** a login dialog blocks "Load more comments" and Escape does not close
+  it; replies to comments are never served. Signed-in pagination and child-comment responses
+  are unverified (the walker is structural, so new response paths need no change)
+- **X signed out:** server-rendered post + ~3 top replies, no API traffic, no `<time>`
+  elements (DOM posts dated from their snowflake id). Signed-in `TweetDetail` parsing and the
+  hidden-reply button labels come from public sources and are unverified
+- **X blocks `HeadlessChrome` user agents** (document answers with an error status); test
+  harnesses must pass a regular `--user-agent`. A fresh load that shows an error page falls
+  back to the user's tab with a completeness note
 
 ### Browser Compatibility
 - **Chrome:** fully supported (tested)
-- **Firefox:** DOM/storage/cookies/screenshots work; no `chrome.debugger`, so Threads
+- **Firefox:** DOM/storage/cookies/screenshots work; no `chrome.debugger`, so social
   captures fall back to embedded data + DOM (not yet tested)
 - **Safari:** same fallback as Firefox (not yet tested)
 
 ## Testing Checklist
 
 Legend: **auto** = covered by `npm test`; **live** = observed in a real Chromium with the
-extension loaded on a real threads.com post; **open** = not verified yet.
+extension loaded on a real post; **open** = not verified yet.
 
 ### Core Functionality
 - [x] Extension loads without errors (live, Chrome for Testing 145)
@@ -428,6 +468,29 @@ extension loaded on a real threads.com post; **open** = not verified yet.
 - [x] Related posts excluded, quoted posts summarised, media URLs picked (auto)
 - [x] Reply-count discrepancy and unavailable replies reported (auto + live data)
 - [ ] Logged-in thread with paginated replies and media download (open: needs an account)
+
+### Instagram Capture
+- [x] Post and Reel URLs parsed; carousel items not registered as posts (auto)
+- [x] Comments linked to the post, replies to comments to their parent (auto)
+- [x] Reported comment count compared with scope `all` (auto + live: warning names 8852 comments)
+- [x] Popup shows "Instagram post detected" / "Load all comments", no hidden-replies row (live)
+- [x] Signed-out capture: root from embedded data, comments with `/p/CODE/c/ID/` URLs, comment
+      column found as scroller, pagination responses recorded (live: 17 comments)
+- [x] Comment column stitched + `-screenshot-context.png` of the viewport (live: 320 px column,
+      1280x757 context); column cut off by the fold -> document stitched instead (live)
+- [ ] Signed-in "Load more comments" / "View replies" clicks and child comments (open)
+
+### X Capture
+- [x] Status URLs parsed (x.com, twitter.com, mobile, /i/web/status) (auto)
+- [x] TweetDetail extraction: both user layouts, visibility wrapper, quotes, other
+      conversations related, snowflake dates (auto)
+- [x] Popup shows "X post detected" with the "Show hidden replies" row (live; row hidden on
+      Instagram and Threads)
+- [x] Signed-out capture: root `20` + 3 replies from the DOM, reply dated
+      2024-03-21T19:02:40.337Z from its id (live)
+- [x] Fresh load answered with an error page -> captured from the user's tab with a note
+      (live: document request answered 403 at the browser level)
+- [ ] Signed-in TweetDetail responses, "Show more replies" and hidden-reply buttons (open)
 
 ### Data Integrity
 - [x] SHA-256 over the exact bytes written to disk (auto)
@@ -473,8 +536,8 @@ extension loaded on a real threads.com post; **open** = not verified yet.
 - Toggle between full-page and viewport capture
 - Custom folder name prefix
 - Configurable scroll delay
-- Threads profile/feed capture (multiple posts in one run)
-- Follow nested reply permalinks automatically
+- Profile/feed capture (multiple posts in one run) for Threads, Instagram and X
+- Follow nested reply permalinks automatically (Threads, X)
 
 ### v1.4.0 (Planned)
 - ZIP packaging of evidence folders
@@ -507,6 +570,13 @@ extension loaded on a real threads.com post; **open** = not verified yet.
 3. **Polyfill first:** Always inject polyfill before content script
 4. **Version the toolkit:** long-lived pages keep an old copy after an extension reload;
    `page-tools.js` carries `TOOLKIT_VERSION` and is re-injected when it differs
+5. **Configure per tab:** the toolkit is platform-neutral; `SocialCaptureSession.ensureTools()`
+   injects it and calls `configurePlatform(platform.dom, code)` on every tab the session uses.
+   Config is JSON (executeScript cannot pass RegExp), so patterns are strings.
+6. **Unpacked service worker code is cached per profile:** restarting Chrome with the same
+   `--user-data-dir` kept running the old background modules (page-tools, injected from disk,
+   was current). Harnesses must use a fresh profile (or reload the extension) after editing
+   `src/background/`.
 
 ### Account Safety (low automation footprint)
 1. **Never run code in the page's main world** and never expose `web_accessible_resources`;
@@ -525,16 +595,18 @@ extension loaded on a real threads.com post; **open** = not verified yet.
 6. **Back off, don't insist:** one Escape per dialog (never repeated once futile, max 6), and
    stop reply loading after 3 wheel steps that do not move the page. A first build pressed
    Escape 322 times at an unclosable login prompt - that is exactly what bot detection sees.
-7. **Policy by session:** `detectSignedIn()` (Threads `sessionid` cookie). Signed out = no
-   account at risk, so programmatic scroll fallback and modal hiding are allowed; signed in =
-   never. Recorded in the manifest as `threadsCapture.automationFootprint`.
+7. **Policy by session:** `detectSignedIn()` (platform `sessionCookie`: Threads/Instagram
+   `sessionid`, X `auth_token`). Signed out = no account at risk, so programmatic scroll
+   fallback and modal hiding are allowed; signed in = never. Recorded in the manifest as
+   `socialCapture.automationFootprint`.
 8. **Genuine clicks act as the account:** hit-test the element under the pointer
-   (`threadsVerifyTarget`) before every press. Pressable post wrappers react to pointer events
+   (`verifyTarget`) before every press. Pressable post wrappers react to pointer events
    that only genuine clicks produce.
 9. **Measure the container the input scrolls:** `findScroller()` anchors on the visible post
-   (`visibleThreadsPost` → nearest scrollable ancestor), and `scrollPointer` hit-tests a
-   wheel point whose scroll chain reaches that container. Signed-in Threads has a tall hidden
-   feed behind the opened post, so the document is scrollable but is not what moves.
+   (`visiblePostAnchor` → nearest scrollable ancestor that is at least partly on screen), and
+   `scrollPointer` hit-tests a wheel point whose scroll chain reaches that container.
+   Signed-in Threads has a tall hidden feed behind the opened post, so the document is
+   scrollable but is not what moves; Instagram scrolls comments in an inner column.
 
 ### Screenshot Correctness
 1. **Never trust the requested scroll offset:** read it back; browsers clamp at the end
@@ -659,7 +731,8 @@ web-ext build
 - **FIXED.md** - Bug fixes and solutions
 - **NEXT_STEPS.md** - Testing checklist and roadmap
 - **CLAUDE.md** - This file (development notes)
-- **tests/** - `npm test`: stitcher geometry, Threads parser contract, evidence pipeline
+- **tests/** - `npm test`: stitcher geometry, Threads / Instagram / X adapter + engine
+  contracts (`tests/fixtures/*-post.json`), evidence pipeline
 
 ---
 
