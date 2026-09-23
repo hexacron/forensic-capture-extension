@@ -154,7 +154,7 @@ export function renderThreadReport({ dataset, capture, files, screenshots }) {
     <tr><th>Capture ID</th><td>${escapeHtml(capture.captureId)}</td></tr>
     <tr><th>Investigator</th><td>${escapeHtml(capture.investigator)}</td></tr>
     <tr><th>Case number</th><td>${escapeHtml(capture.caseNumber)}</td></tr>
-    <tr><th>Tool</th><td>Forensic Data Capture Extension v${escapeHtml(capture.extensionVersion)}</td></tr>
+    <tr><th>Tool</th><td>Exhibit v${escapeHtml(capture.extensionVersion)}</td></tr>
     <tr><th>Method</th><td>${escapeHtml(capture.method)}</td></tr>
     <tr><th>Posts captured</th><td>${stats.threadPosts} (${stats.ancestors} ancestor, 1 root, ${stats.replies} replies); root reports ${formatCount(stats.rootReportedDirectReplies)} direct replies</td></tr>
   </table>

@@ -1,5 +1,5 @@
 /**
- * Popup UI Logic for Forensic Data Capture Extension
+ * Popup UI Logic for Exhibit
  *
  * Handles user interactions and communication with background service worker
  */

@@ -1,5 +1,5 @@
 /**
- * Download Manager for Forensic Data Capture Extension
+ * Download Manager for Exhibit
  *
  * Handles downloading captured forensic data files to the user's system.
  * Manages data URL conversion and sequential download execution.

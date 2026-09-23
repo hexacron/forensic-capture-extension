@@ -1,6 +1,19 @@
-# Changelog - Forensic Data Capture Extension
+# Changelog - Exhibit (formerly Forensic Data Capture Extension)
 
 All notable changes to this project will be documented in this file.
+
+---
+
+## [1.2.1] - 2026-09-23
+
+### 🏷️ Renamed to Exhibit, new icon
+
+- The extension is now called **Exhibit** ("Web Evidence Capture"): Chrome toolbar and
+  extensions page, popup header, `capturedBy` in the forensic manifest, the "Tool" row of the
+  Threads HTML report, and the `hashes.txt` header. Evidence files keep their names
+  (`forensic-capture-<timestamp>.zip`).
+- New evidence-tag icon, drawn per size so it stays sharp; adds a 32 px icon for the toolbar on
+  Retina/HiDPI displays. Regenerate with `python3 generate_icons.py`.
 
 ---
 
@@ -415,5 +428,5 @@ thread mode and captures the post together with its replies.
 
 ---
 
-**Current Version:** 1.1.2
-**Last Updated:** 2026-01-09
+**Current Version:** 1.2.1
+**Last Updated:** 2026-09-23

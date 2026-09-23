@@ -1,5 +1,5 @@
 /**
- * Timestamp Utilities for Forensic Data Capture
+ * Timestamp Utilities for Exhibit
  *
  * Provides ISO 8601 timestamp formatting for forensic captures.
  * All timestamps are in UTC to ensure consistency across time zones.

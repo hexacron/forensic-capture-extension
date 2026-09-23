@@ -1,6 +1,6 @@
-# Forensic Data Capture Extension
+# Exhibit
 
-A cross-browser extension for forensic data capture from web browsers. Captures screenshots, DOM structure, cookies, and browser storage with cryptographic integrity verification and chain of custody tracking.
+**Web evidence capture.** A browser extension for forensic capture of web pages: full-page screenshots, DOM structure, cookies and browser storage, and complete Threads posts with their replies, with SHA-256 integrity verification and chain of custody tracking.
 
 ## Features
 
@@ -31,12 +31,9 @@ A cross-browser extension for forensic data capture from web browsers. Captures 
 
 1. **Clone or download this repository**
 
-2. **Generate extension icons** (optional, but recommended):
+2. **Icons** are already included. To regenerate them after editing `generate_icons.py`:
    ```bash
-   # Install Python Pillow library
    pip3 install Pillow
-
-   # Generate icons
    python3 generate_icons.py
    ```
 
@@ -46,12 +43,12 @@ A cross-browser extension for forensic data capture from web browsers. Captures 
    - Navigate to `chrome://extensions/`
    - Enable "Developer mode" (toggle in top right)
    - Click "Load unpacked"
-   - Select the `forensic-capture-extension` directory
+   - Select the extension folder (the one containing `manifest.json`)
 
    **Firefox:**
    - Navigate to `about:debugging#/runtime/this-firefox`
    - Click "Load Temporary Add-on"
-   - Select any file in the `forensic-capture-extension` directory
+   - Select `manifest.json` in the extension folder
 
    **Safari:**
    - Safari requires converting to Safari App Extension
@@ -171,10 +168,10 @@ Get-FileHash -Algorithm SHA256 *-manifest.json
 ## Project Structure
 
 ```
-forensic-capture-extension/
+exhibit/
 ├── manifest.json                    # Extension manifest (Manifest V3)
 ├── package.json                     # Dependencies
-├── generate_icons.py                # Icon generator script
+├── generate_icons.py                # Icon generator (evidence tag, all sizes)
 │
 ├── lib/
 │   └── browser-polyfill.min.js     # Cross-browser API compatibility
@@ -211,7 +208,7 @@ forensic-capture-extension/
 │       ├── logger.js               # Forensic logging
 │       └── validation.js           # Data validation
 │
-├── icons/                          # Extension icons (16, 48, 128 px)
+├── icons/                          # Extension icons (16, 32, 48, 128 px)
 └── docs/                           # Documentation
 ```
 

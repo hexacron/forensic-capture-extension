@@ -1,5 +1,5 @@
 /**
- * Forensic Metadata Generator for Forensic Data Capture Extension
+ * Forensic Metadata Generator for Exhibit
  *
  * Generates comprehensive forensic manifests that include:
  * - Forensic metadata (capture ID, timestamps, browser info)
@@ -115,7 +115,7 @@ export async function generateForensicManifest(captureData, logger) {
       timestamp: captureData.timestamp,
       timestampFormat: 'ISO-8601-UTC',
       timezone: 'UTC',
-      capturedBy: `Forensic Data Capture Extension v${extensionVersion}`,
+      capturedBy: `Exhibit v${extensionVersion}`,
       browser: {
         name: browserInfo.name,
         version: browserInfo.version,

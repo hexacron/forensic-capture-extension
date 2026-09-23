@@ -1,5 +1,5 @@
 /**
- * Cryptographic Utilities for Forensic Data Capture
+ * Cryptographic Utilities for Exhibit
  *
  * Provides SHA-256 hashing functionality using the Web Crypto API
  * for ensuring data integrity in forensic captures.
@@ -140,7 +140,7 @@ export function formatHashForFile(hash, filename) {
  * @returns {string} Complete hash file content
  */
 export function generateHashManifest(fileHashes) {
-  const header = '# SHA-256 Hashes - Forensic Data Capture\n';
+  const header = '# SHA-256 Hashes - Exhibit\n';
   const timestamp = `# Generated: ${new Date().toISOString()}\n`;
   const separator = '# ========================================\n\n';
 

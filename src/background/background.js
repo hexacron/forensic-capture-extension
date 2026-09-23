@@ -1,5 +1,5 @@
 /**
- * Background Service Worker for Forensic Data Capture Extension
+ * Background Service Worker for Exhibit
  *
  * Main entry point for background operations. Coordinates capture requests
  * from popup UI and manages the forensic data collection process.
@@ -20,7 +20,7 @@ let currentCapture = null;
  * Initialize background service worker
  */
 function init() {
-  console.log('[Background] Forensic Data Capture Extension initialized');
+  console.log('[Background] Exhibit initialized');
 
   // Create capture manager instance
   captureManager = new CaptureManager();

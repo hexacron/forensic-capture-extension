@@ -1,5 +1,5 @@
 /**
- * Audit Trail Logger for Forensic Data Capture
+ * Audit Trail Logger for Exhibit
  *
  * Provides comprehensive logging for chain of custody and forensic audit trails.
  * All logs are timestamped in UTC using ISO 8601 format.

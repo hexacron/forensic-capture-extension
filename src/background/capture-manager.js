@@ -1,5 +1,5 @@
 /**
- * Capture Manager for Forensic Data Capture Extension
+ * Capture Manager for Exhibit
  *
  * Orchestrates the entire forensic capture process including:
  * - Threads post preparation (reply loading) when the tab is a Threads post

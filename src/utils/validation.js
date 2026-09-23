@@ -1,5 +1,5 @@
 /**
- * Data Validation Utilities for Forensic Data Capture
+ * Data Validation Utilities for Exhibit
  *
  * Provides validation functions for ensuring data integrity and correctness
  * before forensic capture and packaging.

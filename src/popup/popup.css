@@ -1,5 +1,5 @@
 /**
- * Popup UI Styles for Forensic Data Capture Extension
+ * Popup UI Styles for Exhibit
  */
 
 /* Reset and Base Styles */
@@ -25,9 +25,16 @@ body {
   min-height: 300px;
 }
 
+/* Palette (matches the evidence-tag icon):
+ *   evidence red  #ce2030 / dark red #8c1220
+ *   ink           #1c1f24 / #2a2e35
+ *   manila        #c9a66b (tag string), panels #fbf6ec / #e8d7b0 / #6f521b
+ */
+
 /* Header */
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2a2e35 0%, #1c1f24 100%);
+  border-bottom: 3px solid #ce2030;
   color: white;
   padding: 20px;
   text-align: center;
@@ -36,12 +43,13 @@ body {
 .title {
   font-size: 18px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   margin-bottom: 4px;
 }
 
 .subtitle {
   font-size: 12px;
-  opacity: 0.9;
+  color: #d9c29a;
   font-weight: 400;
 }
 
@@ -59,7 +67,7 @@ body {
 }
 
 .btn-capture {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #d62839 0%, #a8182a 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -71,12 +79,12 @@ body {
   align-items: center;
   gap: 10px;
   transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(206, 32, 48, 0.3);
 }
 
 .btn-capture:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 16px rgba(206, 32, 48, 0.4);
 }
 
 .btn-capture:active {
@@ -91,7 +99,7 @@ body {
 
 .btn-capture.disabled:hover {
   transform: none;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(206, 32, 48, 0.3);
 }
 
 .btn-icon {
@@ -104,8 +112,8 @@ body {
 
 /* Threads Section */
 .threads-section {
-  background: #f0f4ff;
-  border: 1px solid #c7d2fe;
+  background: #fbf6ec;
+  border: 1px solid #e8d7b0;
   border-radius: 8px;
   padding: 12px 14px;
   margin-bottom: 16px;
@@ -124,7 +132,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #3730a3;
+  color: #6f521b;
 }
 
 .threads-target {
@@ -145,6 +153,7 @@ body {
 
 .option input {
   margin-top: 2px;
+  accent-color: #ce2030;
 }
 
 .threads-note {
@@ -193,7 +202,7 @@ body {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, #d62839 0%, #a8182a 100%);
   transition: width 0.3s ease;
   border-radius: 4px;
 }
@@ -393,13 +402,13 @@ body {
 }
 
 .link {
-  color: #667eea;
+  color: #b51e2e;
   text-decoration: none;
   transition: color 0.2s;
 }
 
 .link:hover {
-  color: #764ba2;
+  color: #8c1220;
   text-decoration: underline;
 }
 

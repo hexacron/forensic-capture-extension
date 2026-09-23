@@ -1,7 +1,7 @@
 {
-  "name": "forensic-capture-extension",
-  "version": "1.2.0",
-  "description": "Cross-browser forensic data capture tool with full-page screenshots, organized folder downloads and Threads post + reply capture",
+  "name": "exhibit",
+  "version": "1.2.1",
+  "description": "Exhibit: web evidence capture with SHA-256 integrity and chain of custody (full-page screenshots, page data, Threads posts and replies)",
   "main": "src/background/background.js",
   "scripts": {
     "lint": "bunx --bun eslint@9 src",
