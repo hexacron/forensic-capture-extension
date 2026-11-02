@@ -139,7 +139,10 @@ export async function generateForensicManifest(captureData, logger) {
         contentType: captureData.dom.metadata?.contentType || 'text/html',
         referrer: captureData.dom.metadata?.referrer || '',
         lastModified: captureData.dom.metadata?.lastModified || ''
-      } : null
+      } : null,
+      // Copies of what dom.json holds (hashed there too), surfaced for readers of the manifest.
+      pageMetadata: captureData.dom?.pageMetadata ?? null,
+      pageIdentifiers: captureData.dom?.pageIdentifiers ?? null
     },
 
     // Captured files with hashes (the manifest itself is hashed in the hashes file)

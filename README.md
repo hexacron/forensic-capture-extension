@@ -8,6 +8,8 @@
 - **Comprehensive Data Capture**:
   - Full-page screenshots (scroll-and-stitch, native resolution, PNG)
   - Complete DOM structure with metadata
+  - Page metadata (description, Open Graph, canonical URL) and, on Facebook, TikTok, Reddit,
+    LinkedIn and VK, the identifiers of the post, video or profile (see *Page identifiers*)
   - HTTP cookies with all attributes
   - Browser storage (localStorage, sessionStorage, IndexedDB)
 - **Social post capture** - Threads (threads.com / threads.net), Instagram posts and Reels
@@ -155,7 +157,7 @@ Unzipping gives the folder `forensic-capture-YYYYMMDDTHHmmssZ/` containing:
 
 - `YYYYMMDDTHHmmssZ-manifest.json` - Forensic manifest with metadata and file hashes
 - `YYYYMMDDTHHmmssZ-screenshot.png` - Full-page screenshot (`-partNN.png` for very long pages)
-- `YYYYMMDDTHHmmssZ-dom.json` - DOM structure at the end of capture
+- `YYYYMMDDTHHmmssZ-dom.json` - DOM structure at the end of capture, with `pageMetadata` and `pageIdentifiers`
 - `YYYYMMDDTHHmmssZ-storage.json` - Browser storage data
 - `YYYYMMDDTHHmmssZ-cookies.json` - HTTP cookies
 - `YYYYMMDDTHHmmssZ-hashes.txt` - SHA-256 hashes (sha256sum format)
@@ -212,6 +214,7 @@ exhibit/
 │   │
 │   ├── content/                    # Extension isolated-world scripts (never page context)
 │   │   ├── content-injector.js     # DOM + storage capture (message handler)
+│   │   ├── page-identifiers.js     # Page metadata and platform identifiers (Facebook, TikTok, Reddit, LinkedIn, VK)
 │   │   └── page-tools.js           # Scrolling, harvesting, overlay handling
 │   │
 │   ├── social/                     # Pure social-post logic (no browser APIs)
@@ -298,13 +301,34 @@ Each capture includes a forensic manifest with:
    pages are split into `-partNN.png` segments to stay inside canvas limits.
    Frames come from `chrome.debugger` (`Page.captureScreenshot`) for social post captures and
    from `browser.tabs.captureVisibleTab()` otherwise.
-2. **DOM**: `document.documentElement.outerHTML` via content script
+2. **DOM**: `document.documentElement.outerHTML` via content script, plus structured page
+   metadata and platform identifiers (below)
 3. **Cookies**: `browser.cookies.getAll()` with full attributes
 4. **Storage**: Page-context injection for localStorage/sessionStorage/IndexedDB
 5. **Social post data**: server-embedded payloads + API response bodies (Threads/Instagram
    `/api/graphql`, X `TweetDetail`) recorded over the DevTools protocol + per-post DOM
    harvested while scrolling, merged by post code. X posts seen only in the DOM are dated
    from their snowflake id
+
+   **Page identifiers** (generic captures on Facebook, TikTok, Reddit, LinkedIn, VK): the
+   manifest's `targetPage.pageIdentifiers` (also in `dom.json`) lists each identifier with
+   where it came from: `url` (read from the address), `dom`, `embedded-json` or `json-ld`
+   (read from the page). Values the page does not show are left out.
+
+   | Site | Identifiers |
+   | --- | --- |
+   | Reddit | `postId`, `postFullname`, `subreddit`; from the page: `author`, `authorId`, `subredditId` (only from the element for that post, never another post on a feed) |
+   | TikTok | `videoId`, `authorUsername`; from the page's embedded data: `authorId`, `description`, `downloadUrl` (only when it describes the video in the address) |
+   | LinkedIn | `postUrn`, `postId`, `authorHandle` from either URL form; from signed-out JSON-LD: `authorName`, `authorUrl`, `datePublished` (the poster, not the author of a reshared original) |
+   | Facebook | address only: `postId` or `postToken` (`pfbid…`), `ownerHandle`, `ownerId`, `groupId`, `videoId`, `photoId`, `profileId`, `shareToken`, `contentType` |
+   | VK (`vk.com`, `vk.ru`) | wall post `postId` (`-<owner>_<post>`), `ownerId`, `ownerType`, `localPostId` |
+
+   Facebook is read from the address only on purpose: its page data may include the *viewing*
+   account's own id, which must not be recorded as the author, and its markup could not be
+   verified without a signed-in session. A vanity profile URL has no numeric id to read.
+   Threads, Instagram and X are covered in full by their own adapters. LinkedIn author data
+   comes from the JSON-LD on signed-out post pages; signed-in pages were not checked, and
+   without that data only the address identifiers are recorded.
 6. **Hashing**: `crypto.subtle.digest("SHA-256")` over the exact bytes that are written to disk
 
 ### Privacy & Permissions
@@ -388,7 +412,7 @@ including its session cookie. Treat capture folders as sensitive.
 
 ### Testing
 
-Automated checks (require [Bun](https://bun.sh); no other dependencies):
+Automated checks (require [Bun](https://bun.sh) and `bun install`, which fetches linkedom to parse the saved pages in `tests/fixtures/pages`):
 
 ```bash
 bun run lint                           # undeclared identifiers (ESLint no-undef)
@@ -397,6 +421,7 @@ bun tests/social-threads.test.mjs      # Threads API extraction, reply linkage, 
 bun tests/social-instagram.test.mjs    # Instagram media + comment extraction, comment linkage
 bun tests/social-x.test.mjs            # X TweetDetail extraction, reply linkage, snowflake dates
 bun tests/evidence-pipeline.test.mjs   # hashes.txt verified with shasum -c, report escaping
+bun tests/page-identifiers.test.mjs    # page metadata + Facebook/TikTok/Reddit/LinkedIn/VK identifiers
 
 npm test                               # all of the above
 ```

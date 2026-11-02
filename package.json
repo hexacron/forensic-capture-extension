@@ -5,7 +5,7 @@
   "main": "src/background/background.js",
   "scripts": {
     "lint": "bunx --bun eslint@9 src",
-    "test": "bun run lint && bun tests/stitcher-geometry.test.mjs && bun tests/social-threads.test.mjs && bun tests/social-instagram.test.mjs && bun tests/social-x.test.mjs && bun tests/evidence-pipeline.test.mjs"
+    "test": "bun run lint && bun tests/stitcher-geometry.test.mjs && bun tests/social-threads.test.mjs && bun tests/social-instagram.test.mjs && bun tests/social-x.test.mjs && bun tests/page-identifiers.test.mjs && bun tests/evidence-pipeline.test.mjs"
   },
   "keywords": [
     "forensic",
@@ -24,6 +24,7 @@
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
+    "linkedom": "^0.18.15",
     "web-ext": "^7.9.0"
   },
   "notes": "Run 'npm install' to install webextension-polyfill when npm is available, or download it manually from: https://unpkg.com/webextension-polyfill@0.12.0/dist/browser-polyfill.min.js"

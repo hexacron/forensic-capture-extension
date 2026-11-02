@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### ✨ Page metadata and platform identifiers
+
+Generic captures now record structured page metadata and, on Facebook, TikTok, Reddit, LinkedIn
+and VK, the identifiers of the post, video or profile being captured. Both are written to
+`dom.json` and copied into the manifest (`targetPage.pageMetadata`, `targetPage.pageIdentifiers`).
+
+- **Page metadata**: description, keywords, canonical URL, language and Open Graph tags; absent
+  values are `null`.
+- **Identifiers** record their source (`url`, `dom`, `embedded-json`, `json-ld`). The page is only
+  trusted when it matches the address: a Reddit feed element for another post and TikTok embedded
+  data for another video are ignored (the latter is noted). LinkedIn reports the poster, not the
+  original author of a reshare.
+- **Facebook is read from the address only.** Its page data may carry the viewing account's id, which
+  must not be recorded as the author, and its markup could not be verified signed out; `pfbid…` post
+  tokens, `story_fbid`, groups, reels, watch, photos,
+  share links and `profile.php` are recognised.
+- Hosts are matched by domain suffix (`netflix.com` is not `x.com`); VK is matched on both `vk.com`
+  and `vk.ru`.
+- New `src/content/page-identifiers.js`, injected with the content script. New test
+  `tests/page-identifiers.test.mjs` with fixtures recorded from live pages; `linkedom` added as a
+  dev dependency.
+
 ### ✨ Instagram and X post capture
 
 The Threads capture is now a generic social post capture with one adapter per platform

@@ -310,10 +310,10 @@ export class CaptureManager {
           files: ['lib/browser-polyfill.min.js']
         });
 
-        // Inject standalone content script
+        // Inject the standalone content script together with the page identifier extractor it uses
         await browser.scripting.executeScript({
           target: { tabId: tabId },
-          files: ['src/content/content-injector.js']
+          files: ['src/content/page-identifiers.js', 'src/content/content-injector.js']
         });
 
         // Wait for initialization

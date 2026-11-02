@@ -17,6 +17,8 @@
    * Capture DOM structure
    */
   function captureDOMStructure() {
+    const pageTools = window.__exhibitPageIdentifiers;
+    if (!pageTools) throw new Error('Page identifier extractor is not loaded');
     try {
       const domData = {
         html: document.documentElement.outerHTML,
@@ -34,7 +36,9 @@
           readyState: document.readyState,
           compatMode: document.compatMode,
           domain: document.domain || ''
-        }
+        },
+        pageMetadata: pageTools.extractPageMetadata(document),
+        pageIdentifiers: pageTools.extractPageIdentifiers(document, window.location.href)
       };
       return domData;
     } catch (error) {
