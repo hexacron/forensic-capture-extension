@@ -450,6 +450,13 @@ Enable debug logging:
 
 ## Troubleshooting
 
+### Chrome Shows "'background.scripts' requires manifest version of 2 or lower"
+
+- Expected and harmless: the manifest declares `background.scripts` for Firefox next to
+  Chrome's `background.service_worker`. Chrome ignores `scripts` and runs the service worker.
+- Removing the key silences Chrome but makes `web-ext lint` fail
+  (`BACKGROUND_SERVICE_WORKER_NOFALLBACK`), so both stay.
+
 ### Capture Button Doesn't Work
 
 - Check browser console for errors
@@ -523,3 +530,5 @@ For issues, questions, or feature requests:
 - Uses Mozilla's webextension-polyfill for cross-browser compatibility
 - Follows NIST and ISO forensic guidelines
 - Inspired by forensic best practices and digital evidence collection standards
+
+Shout out to the [Hunchly](https://hunch.ly) crew, whose work on web capture for online investigations set the bar for tools like this one.

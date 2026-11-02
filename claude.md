@@ -659,6 +659,13 @@ web-ext build
 
 ## Troubleshooting
 
+### Chrome: "'background.scripts' requires manifest version of 2 or lower"
+- **Cause:** `background.scripts` is Firefox's MV3 background (added with the CI `web-ext lint`
+  fix); Chrome ignores it, runs `background.service_worker`, and lists the key as a warning
+- **Decision:** keep both keys in one manifest. Without `scripts`, `web-ext lint` fails with
+  `BACKGROUND_SERVICE_WORKER_NOFALLBACK` (verified); a generated Firefox-only manifest was
+  rejected as extra build machinery for an untested target
+
 ### "browser is not defined"
 - **Cause:** Missing polyfill import
 - **Fix:** Already implemented (v1.0.1) - polyfill in all modules

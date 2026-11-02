@@ -11,9 +11,12 @@ All notable changes to this project will be documented in this file.
 The manifest lint step had never passed: Firefox needs `background.scripts` next to Chrome's
 `background.service_worker`, and an add-on ID in Manifest V3. The manifest now declares both
 (`browser_specific_settings.gecko.id` is `exhibit@hexacron.github.io`; Chrome ignores it and
-still runs the service worker). `web-ext` is updated to 10.x, since 7.x rejects `service_worker`
-outright. Remaining lint output is warnings that Firefox lacks the `debugger` API, which is
-expected: those captures fall back as described under *Protecting the capturing account*.
+still runs the service worker). Chrome lists the ignored key on `chrome://extensions` as
+"'background.scripts' requires manifest version of 2 or lower"; that warning is expected, and
+removing the key makes `web-ext lint` fail with `BACKGROUND_SERVICE_WORKER_NOFALLBACK`.
+`web-ext` is updated to 10.x, since 7.x rejects `service_worker` outright. Remaining lint output
+is warnings that Firefox lacks the `debugger` API, which is expected: those captures fall back
+as described under *Protecting the capturing account*.
 
 ### ✨ Page metadata and platform identifiers
 
