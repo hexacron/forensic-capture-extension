@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 🔧 CI: `web-ext lint` passes
+
+The manifest lint step had never passed: Firefox needs `background.scripts` next to Chrome's
+`background.service_worker`, and an add-on ID in Manifest V3. The manifest now declares both
+(`browser_specific_settings.gecko.id` is `exhibit@hexacron.github.io`; Chrome ignores it and
+still runs the service worker). `web-ext` is updated to 10.x, since 7.x rejects `service_worker`
+outright. Remaining lint output is warnings that Firefox lacks the `debugger` API, which is
+expected: those captures fall back as described under *Protecting the capturing account*.
+
 ### ✨ Page metadata and platform identifiers
 
 Generic captures now record structured page metadata and, on Facebook, TikTok, Reddit, LinkedIn

@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "linkedom": "^0.18.15",
-    "web-ext": "^7.9.0"
+    "web-ext": "^10.8.0"
   },
   "notes": "Run 'npm install' to install webextension-polyfill when npm is available, or download it manually from: https://unpkg.com/webextension-polyfill@0.12.0/dist/browser-polyfill.min.js"
 }

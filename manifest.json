@@ -24,7 +24,14 @@
 
   "background": {
     "service_worker": "src/background/background.js",
+    "scripts": ["src/background/background.js"],
     "type": "module"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "exhibit@hexacron.github.io"
+    }
   },
 
   "action": {
